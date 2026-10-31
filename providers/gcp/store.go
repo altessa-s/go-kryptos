@@ -130,11 +130,16 @@ func (s *Storage[T]) PutResult(ctx context.Context, key string, value T) (result
 	if e != nil {
 		return result, e
 	}
-	b, e := s.o.valueCodec.Encode(value)
+	if e = kryptos.CheckPayload(value); e != nil {
+		return result, e
+	}
+	owned := kryptos.NewSecret(key, value, nil, "")
+	defer owned.Clear()
+	b, e := s.o.valueCodec.Encode(owned.Value)
+	defer clear(b)
 	if e != nil {
 		return result, kryptos.ErrValueEncoding
 	}
-	defer clear(b)
 	_, e = s.client.GetSecret(ctx, &pb.GetSecretRequest{Name: name})
 	result.Created = status.Code(e) == codes.NotFound
 	if status.Code(e) == codes.NotFound {

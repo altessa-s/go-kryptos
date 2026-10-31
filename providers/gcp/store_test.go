@@ -68,3 +68,13 @@ func TestPutDelete(t *testing.T) {
 		return provider(tb, server), provider(tb, server)
 	}, kryptostest.Caps{}, "value")
 }
+
+func TestSliceBackedClientOptions(t *testing.T) {
+	t.Parallel()
+	// Both SDK options have unhashable dynamic values; repeated options retain order.
+	//nolint:staticcheck // Regression for the supported credentials option.
+	opts := gcp.WithClientOptions[string](option.WithScopes("first"), option.WithCredentialsJSON([]byte(`{}`)), option.WithScopes("last"))
+	p := provider(t, fake.New(), opts)
+	defer p.Close(t.Context())
+	require.NoError(t, p.Put(t.Context(), "key", "value"))
+}

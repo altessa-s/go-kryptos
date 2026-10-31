@@ -133,6 +133,9 @@ func (m *Manager[T]) fetchIntoCache(work context.Context, key string) (_ struct{
 	s.Encoded = nil
 	m.cache.Put(key, s.Clone())
 	m.versions[key] = s.Version
+	if m.dirty != nil {
+		m.dirty[key] = true
+	}
 	return struct{}{}, nil
 }
 

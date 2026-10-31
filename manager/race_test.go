@@ -122,3 +122,45 @@ func TestCycleNoOverlapAndMutation(t *testing.T) {
 		s.Clear()
 	})
 }
+
+func TestListingCannotOverwriteConcurrentFetch(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		base, e := memory.New(map[string]string{"key": "old"})
+		require.NoError(t, e)
+		entered := make(chan struct{})
+		release := make(chan struct{})
+		p := &kryptostest.Provider[string]{Backend: base, ListFunc: func(ctx context.Context) ([]*kryptos.Secret[string], error) {
+			values, err := base.List(ctx)
+			close(entered)
+			<-release
+			return values, err
+		}}
+		m, e := manager.New[string](p)
+		require.NoError(t, e)
+		defer m.Close(t.Context())
+		watcher, err := m.Watch(t.Context(), manager.WithSkipInitial())
+		require.NoError(t, err)
+		defer watcher.Close()
+		var wg sync.WaitGroup
+		wg.Go(func() { require.NoError(t, m.RunUpdateCycle(t.Context())) })
+		<-entered
+		require.NoError(t, base.Put(t.Context(), "key", "new"))
+		fetched, err := m.Get(t.Context(), "key")
+		require.NoError(t, err)
+		require.Equal(t, "new", fetched.Value)
+		defer fetched.Clear()
+		close(release)
+		wg.Wait()
+		select {
+		case event := <-watcher.Events():
+			event.Clear()
+			t.Fatal("stale listing emitted a backward event")
+		default:
+		}
+		s, e := m.Cached("key")
+		require.NoError(t, e)
+		require.Equal(t, "new", s.Value)
+		s.Clear()
+	})
+}

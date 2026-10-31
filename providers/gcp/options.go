@@ -16,7 +16,7 @@ import (
 type options[T any] struct {
 	keyCodec          codec.KeyCodec
 	valueCodec        codec.ValueCodec[T]
-	clientOptions     []option.ClientOption
+	clientOptions     []option.ClientOption `optval:"nodup"`
 	labels            map[string]string
 	ignoreInvalidKeys bool
 	clearCredentials  bool

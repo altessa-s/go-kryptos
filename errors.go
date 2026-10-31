@@ -18,6 +18,7 @@ var (
 	ErrClosed                  = errors.New("secret store closed")
 	ErrReadOnly                = errors.New("secret store is read only")
 	ErrPanicked                = errors.New("secret callback panicked")
+	ErrIndeterminate           = errors.New("secret operation outcome indeterminate; do not retry")
 	ErrCleanupFailed           = errors.New("secret cleanup failed")
 	ErrUncloneablePayload      = errors.New("uncloneable payload")
 	ErrKeyEncoding             = errors.New("key encoding failed")
