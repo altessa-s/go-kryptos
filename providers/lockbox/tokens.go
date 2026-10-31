@@ -83,7 +83,14 @@ func (t *ServiceAccountTokens) Token(ctx context.Context) (string, error) {
 		return v, nil
 	}
 	t.mu.Unlock()
-	value, err := t.group.Do(ctx, "iam", func(work context.Context) (string, error) { return t.refresh(work) })
+	value, err := t.group.Do(ctx, "iam", func(work context.Context) (value string, err error) {
+		defer func() {
+			if recover() != nil {
+				value, err = "", kryptos.ErrPanicked
+			}
+		}()
+		return t.refresh(work)
+	})
 	if err != nil && ctx.Err() == nil {
 		t.mu.Lock()
 		defer t.mu.Unlock()
@@ -156,13 +163,16 @@ func (t *ServiceAccountTokens) refresh(ctx context.Context) (string, error) {
 		Token   string    `json:"iamToken"`
 		Expires time.Time `json:"expiresAt"`
 	}
-	if json.Unmarshal(b, &result) != nil || result.Token == "" || !result.Expires.After(now) {
+	if json.Unmarshal(b, &result) != nil || result.Token == "" {
 		return "", kryptos.ErrMalformed
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.closed {
 		return "", kryptos.ErrClosed
+	}
+	if !result.Expires.After(t.o.clock.Now()) {
+		return "", kryptos.ErrMalformed
 	}
 	t.token = result.Token
 	t.expires = result.Expires

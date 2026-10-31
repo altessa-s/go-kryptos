@@ -38,7 +38,7 @@ var layers = map[string][]string{
 	"integration/docker":     {},
 	"providers/gcp/fake":     {"cloud.google.com/go/secretmanager/...", "google.golang.org/..."},
 	"providers/lockbox/fake": {"github.com/yandex-cloud/go-genproto/...", "google.golang.org/..."},
-	"devtools":               {}, "devtools/headers": {},
+	"devtools":               {},
 }
 
 func matches(pattern, imp string) bool {

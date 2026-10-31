@@ -152,11 +152,16 @@ func (s *Storage[T]) PutResult(ctx context.Context, key string, value T) (result
 	if e != nil {
 		return result, e
 	}
-	b, e := s.o.valueCodec.Encode(value)
+	if e = kryptos.CheckPayload(value); e != nil {
+		return result, e
+	}
+	owned := kryptos.NewSecret(key, value, nil, "")
+	defer owned.Clear()
+	b, e := s.o.valueCodec.Encode(owned.Value)
+	defer clear(b)
 	if e != nil {
 		return result, kryptos.ErrValueEncoding
 	}
-	defer clear(b)
 	meta, e := s.kv.GetMetadata(ctx, p)
 	if e != nil && !errors.Is(classify(e), kryptos.ErrNotFound) {
 		return result, classify(e)

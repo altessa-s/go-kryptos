@@ -91,7 +91,7 @@ func retryable(e error) bool {
 		return false
 	}
 	for _, terminal := range []error{kryptos.ErrConflict, kryptos.ErrNotFound, kryptos.ErrInvalidKey, kryptos.ErrClosed,
-		kryptos.ErrPanicked, kryptos.ErrReadOnly, kryptos.ErrUncloneablePayload, kryptos.ErrMalformed, kryptos.ErrInvalidOptions,
+		kryptos.ErrIndeterminate, kryptos.ErrPanicked, kryptos.ErrReadOnly, kryptos.ErrUncloneablePayload, kryptos.ErrMalformed, kryptos.ErrInvalidOptions,
 		kryptos.ErrPermissionDenied, kryptos.ErrFailedPrecondition, kryptos.ErrKeyEncoding, kryptos.ErrKeyDecoding,
 		kryptos.ErrValueEncoding, kryptos.ErrValueDecoding, context.Canceled, context.DeadlineExceeded} {
 		if errors.Is(e, terminal) {

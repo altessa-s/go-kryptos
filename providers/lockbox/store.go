@@ -183,11 +183,16 @@ func (s *Storage[T]) PutResult(ctx context.Context, key string, value T) (result
 	if e != nil {
 		return result, e
 	}
-	b, e := s.o.valueCodec.Encode(value)
+	if e = kryptos.CheckPayload(value); e != nil {
+		return result, e
+	}
+	owned := kryptos.NewSecret(key, value, nil, "")
+	defer owned.Clear()
+	b, e := s.o.valueCodec.Encode(owned.Value)
+	defer clear(b)
 	if e != nil {
 		return result, kryptos.ErrValueEncoding
 	}
-	defer clear(b)
 	entries := []*pb.PayloadEntryChange{{Key: "Data", Value: &pb.PayloadEntryChange_TextValue{TextValue: string(b)}}}
 	meta, e := s.find(ctx, encoded)
 	if e != nil && !errors.Is(e, kryptos.ErrNotFound) {
@@ -295,21 +300,33 @@ func (s *Storage[T]) await(ctx context.Context, op *operation.Operation, err err
 		return err
 	}
 	if op == nil {
-		return kryptos.ErrMalformed
+		return kryptos.ErrIndeterminate
 	}
+	id := op.Id
 	delay := operationPollMin
+	const maxPollFailures = 3
+	failures := 0
 	for !op.Done {
+		if id == "" {
+			return kryptos.ErrIndeterminate
+		}
 		if waitErr := (kryptos.RealClock{}).Wait(ctx, delay); waitErr != nil {
-			return waitErr
+			return kryptos.ErrIndeterminate
 		}
 		delay = min(delay*operationPollFactor, time.Second)
-		op, err = s.ops.Get(ctx, &operation.GetOperationRequest{OperationId: op.Id})
-		if err != nil {
-			return err
+		next, pollErr := s.ops.Get(ctx, &operation.GetOperationRequest{OperationId: id})
+		if pollErr != nil {
+			failures++
+			if failures < maxPollFailures && (status.Code(pollErr) == codes.Unavailable || status.Code(pollErr) == codes.DeadlineExceeded) {
+				continue
+			}
+			return kryptos.ErrIndeterminate
 		}
-		if op == nil {
-			return kryptos.ErrMalformed
+		if next == nil {
+			return kryptos.ErrIndeterminate
 		}
+		failures = 0
+		op = next
 	}
 	if e := op.GetError(); e != nil {
 		return status.ErrorProto(e)
@@ -320,7 +337,7 @@ func classify(e error) error {
 	if e == nil {
 		return nil
 	}
-	if errors.Is(e, kryptos.ErrMalformed) {
+	if errors.Is(e, kryptos.ErrMalformed) || errors.Is(e, kryptos.ErrIndeterminate) {
 		return e
 	}
 	switch status.Code(e) {

@@ -110,3 +110,55 @@ func TestRefreshFailureKeepsUnexpiredToken(t *testing.T) {
 		require.ErrorIs(t, err, kryptos.ErrUnavailable)
 	})
 }
+
+func TestIAMConcurrentPanicSanitized(t *testing.T) {
+	t.Parallel()
+	pemKey := key(t)
+	synctest.Test(t, func(t *testing.T) {
+		release := make(chan struct{})
+		var calls atomic.Int32
+		doer := httpx.DoerFunc(func(*http.Request) (*http.Response, error) {
+			calls.Add(1)
+			<-release
+			panic("credential-canary")
+		})
+		source, err := lockbox.NewServiceAccountTokens(doer, "key", "account", pemKey)
+		require.NoError(t, err)
+		defer source.Close(t.Context())
+		results := make(chan error, 12)
+		for range cap(results) {
+			go func() { _, err := source.Token(t.Context()); results <- err }()
+		}
+		synctest.Wait()
+		close(release)
+		for range cap(results) {
+			err := <-results
+			require.ErrorIs(t, err, kryptos.ErrPanicked)
+			require.NotContains(t, err.Error(), "credential-canary")
+		}
+		require.EqualValues(t, 1, calls.Load())
+	})
+}
+
+func TestIAMRejectsExpiredDelayedResponse(t *testing.T) {
+	t.Parallel()
+	pemKey := key(t)
+	synctest.Test(t, func(t *testing.T) {
+		var calls atomic.Int32
+		doer := httpx.DoerFunc(func(*http.Request) (*http.Response, error) {
+			calls.Add(1)
+			body := fmt.Sprintf(`{"iamToken":"expired","expiresAt":%q}`, time.Now().Add(time.Second).Format(time.RFC3339))
+			time.Sleep(2 * time.Second)
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body))}, nil
+		})
+		source, err := lockbox.NewServiceAccountTokens(doer, "key", "account", pemKey)
+		require.NoError(t, err)
+		defer source.Close(t.Context())
+		for range 2 {
+			value, err := source.Token(t.Context())
+			require.ErrorIs(t, err, kryptos.ErrMalformed)
+			require.Empty(t, value)
+		}
+		require.EqualValues(t, 2, calls.Load())
+	})
+}

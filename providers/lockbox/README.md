@@ -22,3 +22,7 @@ refresh and clears owned key bytes. Strings containing IAM tokens are dropped, n
 
 `PutResult` returns `WriteResult.Created` from backend existence before the write. `Put` discards that result. Close releases owned resources even with
 a canceled context.
+
+Accepted asynchronous mutations are polled using the same operation ID. Three consecutive transient polling failures, cancellation,
+or an unreadable operation result return `kryptos.ErrIndeterminate`. Commitment is unknown: callers must reconcile backend state before
+another write and must not automatically retry the mutation. `CommittedError` is reserved for confirmed writes with failed cleanup.
