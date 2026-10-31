@@ -34,4 +34,6 @@ Encoded payload bytes are always stored as standard base64 in the KV data map's 
 Reads require that format; legacy plaintext data is not supported. A successful HTTP write with
 unreadable version metadata returns `CommittedError` wrapping `ErrMalformed`; the manager refreshes
 its cache without retrying. Ambiguous transport/server failures return `ErrIndeterminate`, requiring
-backend reconciliation before another mutation. The write uses a client clone with SDK retries disabled.
+backend reconciliation before another mutation. Writes and metadata deletes use a client clone with SDK retries disabled.
+
+An ambiguous delete is never retried by name: an independent writer may already have recreated the secret at that path.

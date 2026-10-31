@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/altessa-s/go-kryptos/kryptostest"
 	"github.com/altessa-s/go-kryptos/manager"
 	"github.com/altessa-s/go-kryptos/providers/memory"
 
@@ -61,4 +62,60 @@ func TestIndeterminateWriteBypassesNegativeFilter(t *testing.T) {
 	}
 	require.EqualValues(t, 2, p.writes.Load())
 	require.Zero(t, f.adds.Load())
+}
+
+func TestIndeterminateDeleteRejectsStaleListing(t *testing.T) {
+	t.Parallel()
+	base, err := memory.New(map[string][]byte{"key": []byte("old")})
+	require.NoError(t, err)
+	entered, release := make(chan struct{}), make(chan struct{})
+	p := &kryptostest.Provider[[]byte]{Backend: base,
+		ListFunc: func(ctx context.Context) ([]*kryptos.Secret[[]byte], error) {
+			values, err := base.List(ctx)
+			close(entered)
+			<-release
+			return values, err
+		},
+	}
+	f := &filter{}
+	m, err := manager.New[[]byte](&indeterminateProvider{Provider: p}, manager.WithKeyFilter[[]byte](f))
+	require.NoError(t, err)
+	defer m.Close(t.Context())
+	got, err := m.Get(t.Context(), "key")
+	require.NoError(t, err)
+	got.Clear()
+	sub, err := m.Watch(t.Context(), manager.WithSkipInitial())
+	require.NoError(t, err)
+	defer sub.Close()
+	done := make(chan error, 1)
+	go func() { done <- m.RunUpdateCycle(t.Context()) }()
+	<-entered
+	require.ErrorIs(t, m.Delete(t.Context(), "key"), kryptos.ErrIndeterminate)
+	close(release)
+	require.NoError(t, <-done)
+	got, err = m.Cached("key")
+	require.Nil(t, got)
+	require.ErrorIs(t, err, kryptos.ErrNotFound)
+	got, err = m.Get(t.Context(), "key")
+	require.Nil(t, got)
+	require.ErrorIs(t, err, kryptos.ErrNotFound)
+	require.NoError(t, base.Put(t.Context(), "key", []byte("recreated")))
+	f.missing = true
+	got, err = m.Get(t.Context(), "key")
+	require.NoError(t, err)
+	require.Equal(t, []byte("recreated"), got.Value)
+	got.Clear()
+	select {
+	case event := <-sub.Events():
+		event.Clear()
+		t.Fatal("indeterminate deletion emitted a confirmed event")
+	default:
+	}
+}
+
+func (p *indeterminateProvider) Delete(ctx context.Context, key string) error {
+	if err := p.Provider.Delete(ctx, key); err != nil {
+		return err
+	}
+	return kryptos.ErrIndeterminate
 }

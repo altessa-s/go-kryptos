@@ -247,8 +247,11 @@ func (s *Storage[T]) Delete(ctx context.Context, key string) error {
 		return e
 	}
 	op, e := s.ss.Delete(ctx, &pb.DeleteSecretRequest{SecretId: meta.Id})
-	err := classify(s.await(ctx, op, e))
-	if err == nil || errors.Is(err, kryptos.ErrNotFound) {
+	err := classifyMutation(e)
+	if e == nil {
+		err = classify(s.await(ctx, op, nil))
+	}
+	if err == nil || errors.Is(err, kryptos.ErrNotFound) || errors.Is(err, kryptos.ErrIndeterminate) {
 		s.indexMu.Lock()
 		delete(s.index, encoded)
 		s.indexMu.Unlock()

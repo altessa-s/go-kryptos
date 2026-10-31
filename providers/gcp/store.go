@@ -165,7 +165,7 @@ func (s *Storage[T]) Delete(ctx context.Context, key string) error {
 	if e != nil {
 		return e
 	}
-	return classify(s.client.DeleteSecret(ctx, &pb.DeleteSecretRequest{Name: name}))
+	return classifyMutation(s.client.DeleteSecret(ctx, &pb.DeleteSecretRequest{Name: name}))
 }
 func (s *Storage[T]) List(ctx context.Context) (out []*kryptos.Secret[T], err error) {
 	if e := s.check(ctx); e != nil {
