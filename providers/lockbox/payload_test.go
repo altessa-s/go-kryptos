@@ -60,7 +60,7 @@ func TestManagerContract(t *testing.T) {
 
 func TestMalformedBackendPayloads(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"no-version", "metadata-error", "payload-error", "missing-data"} {
+	for _, mode := range []string{"no-version", "metadata-error", "payload-error", "missing-data", "missing-format", "text-fallback"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 			server := fake.New()
@@ -83,6 +83,12 @@ func TestMalformedBackendPayloads(t *testing.T) {
 					if mode == "payload-error" {
 						return nil, status.Error(codes.PermissionDenied, "denied")
 					}
+					if mode == "text-fallback" {
+						return &pb.Payload{VersionId: "external", Entries: []*pb.Payload_Entry{{Key: "Data", Value: &pb.Payload_Entry_TextValue{TextValue: `"external"`}}}}, nil
+					}
+					if mode == "missing-format" {
+						return &pb.Payload{Entries: []*pb.Payload_Entry{{Key: "Data"}}}, nil
+					}
 					if mode == "missing-data" {
 						return &pb.Payload{Entries: []*pb.Payload_Entry{{Key: "other"}}}, nil
 					}
@@ -94,11 +100,15 @@ func TestMalformedBackendPayloads(t *testing.T) {
 			require.NoError(t, e)
 			defer p.Close(t.Context())
 			require.NoError(t, p.Put(t.Context(), "key", "value"))
-			_, e = p.Get(t.Context(), "key")
+			got, e := p.Get(t.Context(), "key")
 			switch mode {
 			case "no-version":
 				require.ErrorIs(t, e, kryptos.ErrNotFound)
-			case "missing-data":
+			case "text-fallback":
+				require.NoError(t, e)
+				require.Equal(t, "external", got.Value)
+				got.Clear()
+			case "missing-data", "missing-format":
 				require.ErrorIs(t, e, kryptos.ErrMalformed)
 			default:
 				require.ErrorIs(t, e, kryptos.ErrPermissionDenied)

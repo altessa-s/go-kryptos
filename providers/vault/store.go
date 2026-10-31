@@ -6,6 +6,7 @@ package vault
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"net/http"
 	"path"
@@ -87,14 +88,17 @@ func (s *Storage[T]) Get(ctx context.Context, key string) (*kryptos.Secret[T], e
 	if !ok || v.VersionMetadata == nil {
 		return nil, kryptos.ErrMalformed
 	}
-	b := []byte(text)
+	b, e := base64.StdEncoding.DecodeString(text)
 	defer clear(b)
+	if e != nil {
+		return nil, kryptos.ErrMalformed
+	}
 	value, e := s.o.valueCodec.Decode(b)
+	defer zero.Clear(&value)
 	if e != nil {
 		return nil, kryptos.ErrValueDecoding
 	}
 	out := kryptos.NewSecret(key, value, nil, strconv.Itoa(v.VersionMetadata.Version))
-	zero.Clear(&value)
 	out.EncodedKey = path.Base(p)
 	return out, nil
 }
@@ -167,17 +171,16 @@ func (s *Storage[T]) PutResult(ctx context.Context, key string, value T) (result
 		return result, classify(e)
 	}
 	result.Created = meta == nil
-	var opts []api.KVOption
+	data := map[string]any{"data": map[string]any{"data": base64.StdEncoding.EncodeToString(b)}}
 	if s.o.checkAndSet {
 		version := 0
 		if meta != nil {
 			version = meta.CurrentVersion
 		}
-		opts = append(opts, api.WithCheckAndSet(version))
+		data["options"] = map[string]any{"cas": version}
 	}
-	_, e = s.kv.Put(ctx, p, map[string]any{"data": string(b)}, opts...)
-	if e != nil {
-		return result, classify(e)
+	if e = s.write(ctx, p, data); e != nil {
+		return result, e
 	}
 	if s.o.destroyPreviousVersions && meta != nil {
 		var versions []int

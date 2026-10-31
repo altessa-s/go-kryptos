@@ -26,3 +26,8 @@ a canceled context.
 Accepted asynchronous mutations are polled using the same operation ID. Three consecutive transient polling failures, cancellation,
 or an unreadable operation result return `kryptos.ErrIndeterminate`. Commitment is unknown: callers must reconcile backend state before
 another write and must not automatically retry the mutation. `CommittedError` is reserved for confirmed writes with failed cleanup.
+
+Encoded payloads are always written as `BinaryValue` in the `Data` entry. Reads accept binary values
+and fall back to `TextValue` for externally created secrets; an absent value variant is malformed.
+Metadata names are revalidated after listing. A concurrent rename returns `ErrConflict` and invalidates
+the lookup mapping, so the operation cannot read or mutate the renamed secret through the stale key.

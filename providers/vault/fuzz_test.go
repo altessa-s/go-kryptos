@@ -17,7 +17,7 @@ import (
 )
 
 func FuzzKVExtraction(f *testing.F) {
-	f.Add(`{"data":{"data":{"data":"\"value\""},"metadata":{"version":1}}}`)
+	f.Add(`{"data":{"data":{"data":"InZhbHVlIg=="},"metadata":{"version":1}}}`)
 	f.Add(`{}`)
 	f.Fuzz(func(t *testing.T, body string) {
 		if len(body) > 65536 {
