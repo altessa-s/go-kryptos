@@ -12,7 +12,8 @@ import (
 )
 
 // Cached returns a caller-owned copy without fetching.
-func (m *Manager[T]) Cached(key string) (*kryptos.Secret[T], error) {
+func (m *Manager[T]) Cached(key string) (out *kryptos.Secret[T], err error) {
+	defer recoverClone(&err)
 	if e := kryptos.ValidateKey(key); e != nil {
 		return nil, e
 	}
@@ -43,16 +44,14 @@ func (m *Manager[T]) get(ctx context.Context, key string) (*kryptos.Secret[T], e
 	}
 	defer end()
 	for attempt := 0; ; attempt++ {
-		m.mu.Lock()
-		v, ok := m.cache.Get(key)
-		if ok {
-			v = v.Clone()
-			m.mu.Unlock()
+		v, known, err := m.cachedCopy(key)
+		if err != nil {
+			return nil, err
+		}
+		if v != nil {
 			m.o.metrics.CacheHit()
 			return v, nil
 		}
-		_, known := m.versions[key]
-		m.mu.Unlock()
 		if attempt == maxCacheAttempts {
 			return m.fetchOwned(ctx, key)
 		}
@@ -163,3 +162,21 @@ func (m *Manager[T]) fetchOwned(ctx context.Context, key string) (out *kryptos.S
 }
 
 const maxCacheAttempts = 3
+
+// cachedCopy keeps cloning synchronized with eviction and clearing.
+func (m *Manager[T]) cachedCopy(key string) (out *kryptos.Secret[T], known bool, err error) {
+	defer recoverClone(&err)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if v, ok := m.cache.Get(key); ok {
+		return v.Clone(), true, nil
+	}
+	_, known = m.versions[key]
+	return nil, known, nil
+}
+
+func recoverClone(err *error) {
+	if recover() != nil {
+		*err = kryptos.ErrPanicked
+	}
+}
