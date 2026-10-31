@@ -55,9 +55,14 @@ func (m *Manager[T]) Put(ctx context.Context, key string, value T) error {
 			m.o.metrics.FilterFailed()
 		}
 	}
-	fresh, readErr := m.fetch(ctx, key)
+	fresh, readErr := m.readAfterWrite(ctx, key)
 	if readErr != nil {
-		fresh = v.Clone()
+		var cloneErr error
+		fresh, cloneErr = cloneAfterWrite(v)
+		readErr = errors.Join(readErr, cloneErr)
+	}
+	if fresh == nil {
+		return &kryptos.CommittedError{Err: errors.Join(e, filterErr, readErr)}
 	}
 	defer fresh.Clear()
 	clear(fresh.Encoded)
@@ -85,6 +90,9 @@ func (m *Manager[T]) Delete(ctx context.Context, key string) error {
 	defer unlock()
 	e = m.policy.Do(ctx, func(work context.Context) error { return m.p.Delete(work, key) })
 	if e != nil && !errors.Is(e, kryptos.ErrNotFound) {
+		if errors.Is(e, kryptos.ErrIndeterminate) {
+			m.invalidateWrite(key)
+		}
 		return e
 	}
 	m.group.Forget(key)
@@ -134,4 +142,15 @@ func (m *Manager[T]) removeDeleted(key string, notify bool) {
 	if notify {
 		m.notify(kryptos.Deleted, key, nil)
 	}
+}
+
+// readAfterWrite keeps provider and decoder panics within the committed outcome.
+func (m *Manager[T]) readAfterWrite(ctx context.Context, key string) (out *kryptos.Secret[T], err error) {
+	defer recoverClone(&err)
+	return m.fetch(ctx, key)
+}
+
+func cloneAfterWrite[T any](value *kryptos.Secret[T]) (out *kryptos.Secret[T], err error) {
+	defer recoverClone(&err)
+	return value.Clone(), nil
 }

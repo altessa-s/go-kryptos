@@ -206,7 +206,7 @@ func (s *Storage[T]) Delete(ctx context.Context, key string) error {
 	if e != nil {
 		return classify(e)
 	}
-	return classify(s.kv.DeleteMetadata(ctx, p))
+	return s.deleteMetadata(ctx, p)
 }
 func (s *Storage[T]) Ping(ctx context.Context) error {
 	if e := s.check(ctx); e != nil {

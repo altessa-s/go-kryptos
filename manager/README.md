@@ -34,6 +34,9 @@ StringResolver implements the go-nomos resolver contract structurally; neither p
 Get and Cached return independent copies that remain valid across eviction, replacement, and Close. Callers own and clear them. Reads retain no encoded
 payload. Put returns CommittedError for any failure after commitment; do not retry that write.
 
-An indeterminate Put is never retried. Its cached value is invalidated, and the next Get bypasses a potentially stale negative filter to read backend
+An indeterminate Put or Delete is never retried. Its cached value is invalidated, and the next Get bypasses a potentially stale negative filter to read backend
 state. No success event is emitted for an unknown outcome. Cache-hit cloning panics return ErrPanicked; cloning failures while installing a committed
-write or notifying watchers return CommittedError wrapping ErrPanicked. These errors omit the panic value and release the cache lock.
+write, reading it back, cloning its fallback, or notifying watchers return CommittedError wrapping ErrPanicked. These errors omit the panic value and release the cache lock.
+
+An unknown deletion marks the key dirty so an overlapping listing cannot restore stale data. It retains backend lookup eligibility without emitting
+a confirmed deletion event. A read-back panic after Put still reconciles the filter, cache, and watch from the written value when cloning succeeds.

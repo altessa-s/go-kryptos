@@ -50,3 +50,30 @@ func (s *Storage[T]) write(ctx context.Context, key string, data map[string]any)
 	}
 	return nil
 }
+
+// deleteMetadata never replays an ambiguous deletion: a new secret may already
+// occupy the same path when a retry reaches the backend.
+func (s *Storage[T]) deleteMetadata(ctx context.Context, key string) error {
+	client, err := s.client.CloneWithHeaders()
+	if err != nil {
+		return kryptos.ErrInvalidOptions
+	}
+	client.SetMaxRetries(0)
+	// Build from the original client to retain authentication and request settings.
+	request := s.client.NewRequest(http.MethodDelete, "/v1/"+path.Join(s.o.mountPath, "metadata", key))
+	//nolint:staticcheck // Raw status distinguishes definitive rejection from an unknown mutation outcome.
+	response, err := client.RawRequestWithContext(ctx, request)
+	if response != nil && response.Body != nil {
+		defer func() { _ = response.Body.Close() }()
+	}
+	if response == nil || response.Response == nil {
+		return kryptos.ErrIndeterminate
+	}
+	if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
+		return nil
+	}
+	if response.StatusCode >= http.StatusInternalServerError || err == nil {
+		return kryptos.ErrIndeterminate
+	}
+	return classify(err)
+}

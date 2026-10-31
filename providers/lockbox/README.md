@@ -32,5 +32,5 @@ and fall back to `TextValue` for externally created secrets; an absent value var
 Metadata names are revalidated after listing. A concurrent rename returns `ErrConflict` and invalidates
 the lookup mapping, so the operation cannot read or mutate the renamed secret through the stale key.
 
-Ambiguous `Create/AddVersion` RPC failures return `kryptos.ErrIndeterminate`, including lost responses, cancellation, and deadlines after dispatch.
-Definitive backend rejections keep their error classes. Reconcile backend state before issuing another write; do not automatically replay it.
+Ambiguous `Create/AddVersion/Delete` RPC failures return `kryptos.ErrIndeterminate`, including lost responses, cancellation, and deadlines after dispatch.
+Definitive backend rejections keep their error classes. Reconcile backend state before issuing another mutation; do not automatically replay it.

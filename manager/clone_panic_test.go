@@ -102,3 +102,32 @@ func TestPutClonePanicReleasesLock(t *testing.T) {
 		})
 	}
 }
+
+type fallbackPanicProvider struct {
+	kryptos.Provider[panicClone]
+	count *atomic.Int32
+}
+
+func (p fallbackPanicProvider) Get(context.Context, string) (*kryptos.Secret[panicClone], error) {
+	p.count.Store(1)
+	return nil, kryptos.ErrPermissionDenied
+}
+func TestCommittedWriteFallbackClonePanic(t *testing.T) {
+	t.Parallel()
+	count := &atomic.Int32{}
+	base, err := memory.New(map[string]panicClone{})
+	require.NoError(t, err)
+	m, err := manager.New[panicClone](fallbackPanicProvider{Provider: base, count: count})
+	require.NoError(t, err)
+	defer m.Close(t.Context())
+	err = m.Put(t.Context(), "key", panicClone{remaining: count})
+	require.ErrorIs(t, err, kryptos.ErrPanicked)
+	require.ErrorIs(t, err, kryptos.ErrPermissionDenied)
+	_, committed := errors.AsType[*kryptos.CommittedError](err)
+	require.True(t, committed)
+	require.NotContains(t, err.Error(), kryptostest.Canary)
+	cached, err := m.Cached("key")
+	require.Nil(t, cached)
+	require.ErrorIs(t, err, kryptos.ErrNotFound)
+	require.NoError(t, m.Purge(t.Context()))
+}

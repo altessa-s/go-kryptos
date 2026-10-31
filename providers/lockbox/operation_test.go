@@ -99,3 +99,46 @@ func TestPollingOutageDoesNotReplayMutation(t *testing.T) {
 		})
 	}
 }
+
+func TestDeletePollingOutageInvalidatesCache(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		server := fake.New()
+		var deletes atomic.Int32
+		dial, closeServer := server.Connect(grpc.UnaryInterceptor(func(ctx context.Context, req any, info *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {
+			if _, ok := req.(*operation.GetOperationRequest); ok {
+				return nil, status.Error(codes.Unavailable, "poll outage")
+			}
+			reply, err := next(ctx, req)
+			if err == nil && strings.HasSuffix(info.FullMethod, "/Delete") {
+				deletes.Add(1)
+				reply.(*operation.Operation).Done = false
+			}
+			return reply, err
+		}))
+		defer closeServer()
+		p, err := lockbox.New[string](t.Context(), "folder", tokens{}, lockbox.WithDialOptions[string](dial...), lockbox.WithEndpoints[string](lockbox.Endpoints{Secret: "passthrough:///secret", Payload: "passthrough:///payload", Operation: "passthrough:///operation"}))
+		require.NoError(t, err)
+		m, err := manager.New(p)
+		require.NoError(t, err)
+		defer m.Close(t.Context())
+		require.NoError(t, m.Put(t.Context(), "key", "old"))
+		sub, err := m.Watch(t.Context(), manager.WithSkipInitial())
+		require.NoError(t, err)
+		defer sub.Close()
+		require.ErrorIs(t, m.Delete(t.Context(), "key"), kryptos.ErrIndeterminate)
+		require.EqualValues(t, 1, deletes.Load())
+		cached, err := m.Cached("key")
+		require.Nil(t, cached)
+		require.ErrorIs(t, err, kryptos.ErrNotFound)
+		got, err := m.Get(t.Context(), "key")
+		require.Nil(t, got)
+		require.ErrorIs(t, err, kryptos.ErrNotFound)
+		select {
+		case event := <-sub.Events():
+			event.Clear()
+			t.Fatal("unknown delete emitted an event")
+		default:
+		}
+	})
+}
