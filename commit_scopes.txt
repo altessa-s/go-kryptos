@@ -1,0 +1,32 @@
+# Commit Scopes for go-kryptos
+# Use these scopes in conventional commits: type(scope): description
+# The scope is optional: omit it for repository-wide changes. Never use `root`.
+# Only the first word of a non-comment line is a scope.
+# Example: fix(providers/lockbox): check the IAM response status
+
+# Repository scopes
+deps                        # Dependency updates (Dependabot writes build(deps): bump ...)
+README                      # Root README
+docs                        # Documentation
+
+# Packages
+kryptos                     # Root package: secret type, provider ports, key rules, errors
+codec                       # Key and value codec ports
+codec/base64key             # Base64 key codec
+codec/jsonvalue             # JSON value codec
+manager                     # Manager: cache, write-through, update cycle, watch, health
+providers/memory            # In-memory provider
+providers/vault             # HashiCorp Vault KV v2 provider, nested module
+providers/gcp               # Google Cloud Secret Manager provider, nested module
+providers/lockbox           # Yandex Cloud Lockbox provider, nested module
+kryptostest                 # Provider contract suite and test doubles
+internal/clone              # Deep copy of secret payloads
+internal/zero               # Clearing of secret payloads
+internal/keystate           # Per-key generation and mutation lock
+internal/flight             # Keyed single-flight with a sanitized panic boundary
+internal/lru                # Sharded LRU with an eviction callback
+integration/docker          # Docker-backed integration tests, nested module
+
+# Tooling
+devtools                    # Development tool dependencies
+ci                          # GitHub Actions workflows and scripts
