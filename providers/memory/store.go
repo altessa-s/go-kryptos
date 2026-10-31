@@ -23,6 +23,14 @@ type Store[T any] struct {
 // New validates and copies initial values.
 func New[T any](values map[string]T) (*Store[T], error) {
 	s := &Store[T]{values: make(map[string]*kryptos.Secret[T])}
+	transferred := false
+	defer func() {
+		if !transferred {
+			for _, v := range s.values {
+				v.Clear()
+			}
+		}
+	}()
 	for k, v := range values {
 		if e := kryptos.ValidateKey(k); e != nil {
 			return nil, e
@@ -35,6 +43,7 @@ func New[T any](values map[string]T) (*Store[T], error) {
 		s.version++
 		s.values[k] = kryptos.NewSecret(k, v, nil, strconv.FormatUint(s.version, 10))
 	}
+	transferred = true
 	return s, nil
 }
 func (*Store[T]) Name() string { return "memory" }
@@ -69,9 +78,18 @@ func (s *Store[T]) List(ctx context.Context) ([]*kryptos.Secret[T], error) {
 		return nil, e
 	}
 	out := make([]*kryptos.Secret[T], 0, len(s.values))
+	transferred := false
+	defer func() {
+		if !transferred {
+			for _, v := range out {
+				v.Clear()
+			}
+		}
+	}()
 	for _, v := range s.values {
 		out = append(out, v.Clone())
 	}
+	transferred = true
 	return out, nil
 }
 func (s *Store[T]) Put(ctx context.Context, key string, value T) error {

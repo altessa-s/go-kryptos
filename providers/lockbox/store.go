@@ -11,7 +11,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/altessa-s/go-kryptos/codec/base64key"
 	"github.com/altessa-s/go-kryptos/codec/jsonvalue"
@@ -174,6 +173,9 @@ func (s *Storage[T]) payload(ctx context.Context, key string, meta *pb.Secret) (
 		if e != nil {
 			return nil, kryptos.ErrValueDecoding
 		}
+		if e := kryptos.CheckPayload(v); e != nil {
+			return nil, e
+		}
 		out := kryptos.NewSecret(key, v, nil, payload.VersionId)
 		out.EncodedKey = meta.Name
 		return out, nil
@@ -262,8 +264,9 @@ func (s *Storage[T]) List(ctx context.Context) (out []*kryptos.Secret[T], err er
 	if e := s.check(ctx); e != nil {
 		return nil, e
 	}
+	transferred := false
 	defer func() {
-		if err != nil {
+		if !transferred {
 			for _, v := range out {
 				v.Clear()
 			}
@@ -294,6 +297,7 @@ func (s *Storage[T]) List(ctx context.Context) (out []*kryptos.Secret[T], err er
 		}
 		out = append(out, v)
 	}
+	transferred = true
 	return out, nil
 }
 func (s *Storage[T]) Ping(ctx context.Context) error {
@@ -312,78 +316,9 @@ func (s *Storage[T]) Close(ctx context.Context) error {
 	})
 	return s.closeErr
 }
-func (s *Storage[T]) await(ctx context.Context, op *operation.Operation, err error) error {
-	if err != nil {
-		return err
-	}
-	if op == nil {
-		return kryptos.ErrIndeterminate
-	}
-	id := op.Id
-	delay := operationPollMin
-	const maxPollFailures = 3
-	failures := 0
-	for !op.Done {
-		if id == "" {
-			return kryptos.ErrIndeterminate
-		}
-		if waitErr := (kryptos.RealClock{}).Wait(ctx, delay); waitErr != nil {
-			return kryptos.ErrIndeterminate
-		}
-		delay = min(delay*operationPollFactor, time.Second)
-		next, pollErr := s.ops.Get(ctx, &operation.GetOperationRequest{OperationId: id})
-		if pollErr != nil {
-			failures++
-			if failures < maxPollFailures && (status.Code(pollErr) == codes.Unavailable || status.Code(pollErr) == codes.DeadlineExceeded) {
-				continue
-			}
-			return kryptos.ErrIndeterminate
-		}
-		if next == nil {
-			return kryptos.ErrIndeterminate
-		}
-		failures = 0
-		op = next
-	}
-	if e := op.GetError(); e != nil {
-		return status.ErrorProto(e)
-	}
-	return nil
-}
-func classify(e error) error {
-	if e == nil {
-		return nil
-	}
-	if errors.Is(e, kryptos.ErrMalformed) || errors.Is(e, kryptos.ErrIndeterminate) {
-		return e
-	}
-	switch status.Code(e) {
-	case codes.PermissionDenied, codes.Unauthenticated:
-		return kryptos.ErrPermissionDenied
-	case codes.InvalidArgument:
-		return kryptos.ErrMalformed
-	case codes.FailedPrecondition:
-		return kryptos.ErrFailedPrecondition
-	case codes.NotFound:
-		return kryptos.ErrNotFound
-	case codes.AlreadyExists, codes.Aborted:
-		return kryptos.ErrConflict
-	case codes.Canceled:
-		return context.Canceled
-	case codes.DeadlineExceeded:
-		return context.DeadlineExceeded
-	default:
-		return kryptos.ErrUnavailable
-	}
-}
 
 const (
-	listPageSize        = 100
-	operationPollMin    = 50 * time.Millisecond
-	operationPollFactor = 2
-)
-
-const (
+	listPageSize       = 100
 	maxFolderIDLength  = 50
 	maxAccountIDLength = 100
 	minRSAKeyBits      = 2048

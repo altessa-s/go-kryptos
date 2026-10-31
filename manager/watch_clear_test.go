@@ -6,12 +6,15 @@ package manager_test
 
 import (
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/altessa-s/go-kryptos/manager"
 	"github.com/altessa-s/go-kryptos/providers/memory"
+
+	kryptos "github.com/altessa-s/go-kryptos"
 )
 
 type trackedCopies struct {
@@ -56,4 +59,45 @@ func TestEveryDroppedWatchCopyIsCleared(t *testing.T) {
 			}
 		})
 	}
+}
+
+type watchPanicPayload struct {
+	clearingPayload
+	remaining *atomic.Int32
+}
+
+func (p watchPanicPayload) Clone() watchPanicPayload {
+	if p.remaining.Add(-1) == 0 {
+		panic("initial clone failed")
+	}
+	p.clearingPayload = p.clearingPayload.Clone()
+	return p
+}
+func TestWatchInitialPanicRollsBack(t *testing.T) {
+	t.Parallel()
+	copies := &trackedCopies{}
+	count := &atomic.Int32{}
+	p, err := memory.New[watchPanicPayload](nil)
+	require.NoError(t, err)
+	m, err := manager.New(p)
+	require.NoError(t, err)
+	defer m.Close(t.Context())
+	value := watchPanicPayload{Data: []byte("secret"), Copies: copies, remaining: count}
+	require.NoError(t, m.Put(t.Context(), "first", value))
+	require.NoError(t, m.Put(t.Context(), "second", value))
+	copies.mu.Lock()
+	copies.buffers = nil
+	copies.mu.Unlock()
+	count.Store(2)
+	sub, err := m.Watch(t.Context())
+	require.Nil(t, sub)
+	require.ErrorIs(t, err, kryptos.ErrPanicked)
+	copies.mu.Lock()
+	require.Len(t, copies.buffers, 1)
+	require.Equal(t, []byte{0, 0, 0, 0, 0, 0}, copies.buffers[0])
+	copies.mu.Unlock()
+	// A failed subscription must not receive later writes.
+	count.Store(100)
+	require.NoError(t, m.Put(t.Context(), "third", value))
+	require.Equal(t, int32(95), count.Load())
 }

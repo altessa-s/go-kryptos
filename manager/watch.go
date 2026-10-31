@@ -72,7 +72,8 @@ func (s *Subscription[T]) send(e *kryptos.Event[T]) {
 }
 
 // Watch subscribes to cycle and manager write events, optionally including cached initial values.
-func (m *Manager[T]) Watch(ctx context.Context, opts ...WatchOption) (*Subscription[T], error) {
+func (m *Manager[T]) Watch(ctx context.Context, opts ...WatchOption) (out *Subscription[T], err error) {
+	defer recoverClone(&err)
 	if e := ctx.Err(); e != nil {
 		return nil, e
 	}
@@ -92,6 +93,13 @@ func (m *Manager[T]) Watch(ctx context.Context, opts ...WatchOption) (*Subscript
 	if m.closed {
 		return nil, kryptos.ErrClosed
 	}
+	transferred := false
+	defer func() {
+		if !transferred {
+			delete(m.watchers, s)
+			s.close()
+		}
+	}()
 	m.watchers[s] = struct{}{}
 	s.stop = context.AfterFunc(ctx, s.Close)
 	if !o.skipInitial {
@@ -100,6 +108,7 @@ func (m *Manager[T]) Watch(ctx context.Context, opts ...WatchOption) (*Subscript
 			m.deliver(s, kryptos.Created, k, v)
 		}
 	}
+	transferred = true
 	return s, nil
 }
 func (m *Manager[T]) notify(kind kryptos.EventType, key string, v *kryptos.Secret[T]) {

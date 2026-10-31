@@ -74,4 +74,5 @@ make test-integration-docker
 ```
 
 Unit tests use in-memory HTTP and gRPC transports. Tagged TCP/TLS tests report a skip if listeners are prohibited.
-Docker tests require a Docker daemon and use `hashicorp/vault:1.20.0`. See [architecture decisions](docs/adr/) and [AGENTS.md](AGENTS.md).
+Docker tests require a Docker daemon and use `hashicorp/vault:1.20.0`.
+Architecture tests enforce inward dependencies across all modules, generated options, and package documentation.

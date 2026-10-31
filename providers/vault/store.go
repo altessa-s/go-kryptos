@@ -98,6 +98,9 @@ func (s *Storage[T]) Get(ctx context.Context, key string) (*kryptos.Secret[T], e
 	if e != nil {
 		return nil, kryptos.ErrValueDecoding
 	}
+	if e := kryptos.CheckPayload(value); e != nil {
+		return nil, e
+	}
 	out := kryptos.NewSecret(key, value, nil, strconv.Itoa(v.VersionMetadata.Version))
 	out.EncodedKey = path.Base(p)
 	return out, nil
@@ -106,8 +109,9 @@ func (s *Storage[T]) List(ctx context.Context) (out []*kryptos.Secret[T], err er
 	if e := s.check(ctx); e != nil {
 		return nil, e
 	}
+	transferred := false
 	defer func() {
-		if err != nil {
+		if !transferred {
 			for _, s := range out {
 				s.Clear()
 			}
@@ -143,6 +147,7 @@ func (s *Storage[T]) List(ctx context.Context) (out []*kryptos.Secret[T], err er
 		}
 		out = append(out, v)
 	}
+	transferred = true
 	return out, nil
 }
 func (s *Storage[T]) Put(ctx context.Context, key string, value T) error {
