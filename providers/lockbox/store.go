@@ -159,14 +159,22 @@ func (s *Storage[T]) payload(ctx context.Context, key string, meta *pb.Secret) (
 		if entry.GetKey() != "Data" {
 			continue
 		}
-		b := []byte(entry.GetTextValue())
+		var b []byte
+		switch value := entry.GetValue().(type) {
+		case *pb.Payload_Entry_BinaryValue:
+			b = value.BinaryValue
+		case *pb.Payload_Entry_TextValue:
+			b = []byte(value.TextValue)
+		default:
+			return nil, kryptos.ErrMalformed
+		}
 		defer clear(b)
 		v, e := s.o.valueCodec.Decode(b)
+		defer zero.Clear(&v)
 		if e != nil {
 			return nil, kryptos.ErrValueDecoding
 		}
 		out := kryptos.NewSecret(key, v, nil, payload.VersionId)
-		zero.Clear(&v)
 		out.EncodedKey = meta.Name
 		return out, nil
 	}
@@ -193,7 +201,7 @@ func (s *Storage[T]) PutResult(ctx context.Context, key string, value T) (result
 	if e != nil {
 		return result, kryptos.ErrValueEncoding
 	}
-	entries := []*pb.PayloadEntryChange{{Key: "Data", Value: &pb.PayloadEntryChange_TextValue{TextValue: string(b)}}}
+	entries := []*pb.PayloadEntryChange{{Key: "Data", Value: &pb.PayloadEntryChange_BinaryValue{BinaryValue: b}}}
 	meta, e := s.find(ctx, encoded)
 	if e != nil && !errors.Is(e, kryptos.ErrNotFound) {
 		return result, e

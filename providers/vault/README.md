@@ -29,3 +29,9 @@ SDK-owned JSON strings cannot be cleared; caller-owned results and temporary byt
 
 `PutResult` returns `WriteResult.Created` from backend existence before the write. `Put` discards that result. Close releases owned resources even with
 a canceled context.
+
+Encoded payload bytes are always stored as standard base64 in the KV data map's `data` string.
+Reads require that format; legacy plaintext data is not supported. A successful HTTP write with
+unreadable version metadata returns `CommittedError` wrapping `ErrMalformed`; the manager refreshes
+its cache without retrying. Ambiguous transport/server failures return `ErrIndeterminate`, requiring
+backend reconciliation before another mutation. The write uses a client clone with SDK retries disabled.

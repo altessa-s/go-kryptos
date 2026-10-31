@@ -13,6 +13,7 @@ import (
 	"crypto/x509"
 	"math/big"
 	"net"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -153,7 +154,14 @@ func add(e *entry, changes []*pb.PayloadEntryChange) {
 	id := strconv.Itoa(len(e.payloads) + 1)
 	p := &pb.Payload{VersionId: id}
 	for _, c := range changes {
-		p.Entries = append(p.Entries, &pb.Payload_Entry{Key: c.Key, Value: &pb.Payload_Entry_TextValue{TextValue: c.GetTextValue()}})
+		entry := &pb.Payload_Entry{Key: c.Key}
+		switch value := c.GetValue().(type) {
+		case *pb.PayloadEntryChange_BinaryValue:
+			entry.Value = &pb.Payload_Entry_BinaryValue{BinaryValue: slices.Clone(value.BinaryValue)}
+		case *pb.PayloadEntryChange_TextValue:
+			entry.Value = &pb.Payload_Entry_TextValue{TextValue: value.TextValue}
+		}
+		p.Entries = append(p.Entries, entry)
 	}
 	e.payloads = append(e.payloads, p)
 	e.secret.CurrentVersion = &pb.Version{Id: id}

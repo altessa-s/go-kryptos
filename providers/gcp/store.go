@@ -111,11 +111,11 @@ func (s *Storage[T]) Get(ctx context.Context, key string) (*kryptos.Secret[T], e
 	}
 	defer clear(v.Payload.Data)
 	value, e := s.o.valueCodec.Decode(v.Payload.Data)
+	defer zero.Clear(&value)
 	if e != nil {
 		return nil, kryptos.ErrValueDecoding
 	}
 	out := kryptos.NewSecret(key, value, nil, v.Name)
-	zero.Clear(&value)
 	out.EncodedKey = path.Base(name)
 	return out, nil
 }

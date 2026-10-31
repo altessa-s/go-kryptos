@@ -72,6 +72,12 @@ func (s *Storage[T]) find(ctx context.Context, key string) (*pb.Secret, error) {
 			if err != nil {
 				return nil, classify(err)
 			}
+			if meta.GetName() != key {
+				s.indexMu.Lock()
+				delete(s.index, key)
+				s.indexMu.Unlock()
+				return nil, kryptos.ErrConflict
+			}
 			if !s.matches(meta) {
 				return nil, kryptos.ErrConflict
 			}

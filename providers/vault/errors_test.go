@@ -76,7 +76,7 @@ func TestMalformedAndConflict(t *testing.T) {
 		name, body string
 		code       int
 		want       error
-	}{{"malformed", `{"data":{"data":{"unexpected":"x"},"metadata":{"version":1}}}`, 200, kryptos.ErrMalformed}, {"cas", `{"errors":["check-and-set mismatch"]}`, 400, kryptos.ErrConflict}, {"denied", `{"errors":["` + kryptostest.Canary + `"]}`, 403, kryptos.ErrPermissionDenied}} {
+	}{{"invalid-base64", `{"data":{"data":{"data":"%"},"metadata":{"version":1}}}`, 200, kryptos.ErrMalformed}, {"malformed", `{"data":{"data":{"unexpected":"x"},"metadata":{"version":1}}}`, 200, kryptos.ErrMalformed}, {"cas", `{"errors":["check-and-set mismatch"]}`, 400, kryptos.ErrConflict}, {"denied", `{"errors":["` + kryptostest.Canary + `"]}`, 403, kryptos.ErrPermissionDenied}} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			srv := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
