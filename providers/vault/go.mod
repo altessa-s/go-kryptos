@@ -11,7 +11,7 @@ require (
 )
 
 require (
-	github.com/altessa-s/go-atlas-core v0.3.0 // indirect
+	github.com/altessa-s/go-atlas-core v0.3.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.7 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
