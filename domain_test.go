@@ -6,10 +6,13 @@ package kryptos_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -87,5 +90,18 @@ func FuzzSecretFormat(f *testing.F) {
 		for _, format := range []string{"%v", "%+v", "%#v", "%s", "%q", "%x"} {
 			require.Equal(t, "[REDACTED]", fmt.Sprintf(format, s))
 		}
+	})
+}
+
+func TestClockWait(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		clock := kryptos.RealClock{}
+		start := clock.Now()
+		require.NoError(t, clock.Wait(t.Context(), time.Second))
+		require.Equal(t, time.Second, clock.Now().Sub(start))
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		require.ErrorIs(t, clock.Wait(ctx, time.Hour), context.Canceled)
 	})
 }

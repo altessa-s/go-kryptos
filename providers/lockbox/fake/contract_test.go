@@ -43,20 +43,39 @@ func TestContract(t *testing.T) {
 }
 func TestCreation(t *testing.T) {
 	t.Parallel()
-	kryptostest.RunCreationContract(t, func(tb testing.TB) (kryptos.Provider[string], kryptos.Provider[string]) {
+	kryptostest.RunCreationContract(t, func(tb testing.TB) (kryptos.Provider[string], kryptos.Provider[string], func(string) int) {
 		tb.Helper()
 		s := fake.New()
 		require.Zero(tb, s.Versions("missing"))
-		tb.Cleanup(func() {
-			key, e := base64key.New().Encode("concurrent")
+		return provider(tb, s), provider(tb, s), func(key string) int {
+			encoded, e := base64key.New().Encode(key)
 			require.NoError(tb, e)
-			require.Equal(tb, 2, s.Versions(key))
-		})
-		return provider(tb, s), provider(tb, s)
+			return s.Versions(encoded)
+		}
 	}, kryptostest.Caps{}, "value")
 }
 func TestInvalidConstructor(t *testing.T) {
 	t.Parallel()
 	_, e := lockbox.New[string](t.Context(), "", tokens{})
 	require.ErrorIs(t, e, kryptos.ErrInvalidOptions)
+}
+
+func TestInactiveSecretAndCounters(t *testing.T) {
+	t.Parallel()
+	server := fake.New()
+	p := provider(t, server)
+	defer p.Close(t.Context())
+	require.NoError(t, p.Put(t.Context(), "key", "value"))
+	values, err := p.List(t.Context())
+	require.NoError(t, err)
+	require.Len(t, values, 1)
+	values[0].Clear()
+	lists, payloads := server.Counts()
+	require.Positive(t, lists)
+	require.Equal(t, 1, payloads)
+	encoded, err := base64key.New().Encode("key")
+	require.NoError(t, err)
+	server.Deactivate(encoded)
+	require.ErrorIs(t, p.Put(t.Context(), "key", "new"), kryptos.ErrConflict)
+	require.Equal(t, 1, server.Versions(encoded))
 }

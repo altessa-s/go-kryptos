@@ -9,7 +9,6 @@ import "github.com/altessa-s/go-kryptos/manager"
 | Method | Contract |
 |---|---|
 | `Get`, `Cached` | Caller-owned copies; Cached never fetches |
-| `GetShared` | Borrowed reference; invalidated by cache mutation |
 | `Put`, `Delete` | Backend mutation, cache invalidation/refresh, filter update, watch event |
 | `Warm` | Bounded concurrent fetches, joined per-key errors |
 | `RunUpdateCycle` | Caller-driven reconciliation; overlaps collapse |
@@ -31,3 +30,6 @@ excludes mutations while applying a consistent listing; version metadata tracks 
 
 The manager owns cached values. Consumers clear Get results and delivered events. Closing subscriptions clears queued events.
 StringResolver implements the go-nomos resolver contract structurally; neither production library imports the other.
+
+Get and Cached return independent copies that remain valid across eviction, replacement, and Close. Callers own and clear them. Reads retain no encoded
+payload. Put returns CommittedError for any failure after commitment; do not retry that write.

@@ -8,7 +8,9 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -94,7 +96,7 @@ func TestRPCClassification(t *testing.T) {
 	for _, tc := range []struct {
 		code codes.Code
 		want error
-	}{{codes.Aborted, kryptos.ErrConflict}, {codes.PermissionDenied, kryptos.ErrUnavailable}, {codes.Canceled, context.Canceled}, {codes.DeadlineExceeded, context.DeadlineExceeded}} {
+	}{{codes.Unauthenticated, kryptos.ErrPermissionDenied}, {codes.InvalidArgument, kryptos.ErrMalformed}, {codes.FailedPrecondition, kryptos.ErrFailedPrecondition}, {codes.Aborted, kryptos.ErrConflict}, {codes.PermissionDenied, kryptos.ErrPermissionDenied}, {codes.Canceled, context.Canceled}, {codes.DeadlineExceeded, context.DeadlineExceeded}} {
 		t.Run(tc.code.String(), func(t *testing.T) {
 			t.Parallel()
 			server := fake.New()
@@ -112,4 +114,35 @@ func TestRPCClassification(t *testing.T) {
 			require.NotContains(t, e.Error(), kryptostest.Canary)
 		})
 	}
+}
+
+type skipMetrics struct{ skipped atomic.Int32 }
+
+func (*skipMetrics) CacheHit()                    {}
+func (*skipMetrics) CacheMiss()                   {}
+func (*skipMetrics) FilterFailed()                {}
+func (*skipMetrics) Fetched(time.Duration, error) {}
+func (*skipMetrics) Cycled(time.Duration, error)  {}
+func (*skipMetrics) CacheSize(int)                {}
+func (m *skipMetrics) Skipped()                   { m.skipped.Add(1) }
+func TestListSkipsDisabledLatestVersion(t *testing.T) {
+	t.Parallel()
+	server := fake.New()
+	conn, closeServer, err := server.Connect(grpc.UnaryInterceptor(func(ctx context.Context, req any, info *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {
+		if strings.HasSuffix(info.FullMethod, "/AccessSecretVersion") {
+			return nil, status.Error(codes.FailedPrecondition, "disabled")
+		}
+		return next(ctx, req)
+	}))
+	require.NoError(t, err)
+	defer closeServer()
+	metrics := &skipMetrics{}
+	p, err := gcp.New[string](t.Context(), "test-project", []byte(`{"type":"service_account"}`), gcp.WithClientOptions[string](option.WithGRPCConn(conn)), gcp.WithMetrics[string](metrics))
+	require.NoError(t, err)
+	defer p.Close(t.Context())
+	require.NoError(t, p.Put(t.Context(), "key", "value"))
+	values, err := p.List(t.Context())
+	require.NoError(t, err)
+	require.Empty(t, values)
+	require.EqualValues(t, 1, metrics.skipped.Load())
 }

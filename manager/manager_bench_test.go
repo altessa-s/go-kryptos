@@ -34,34 +34,24 @@ func BenchmarkGet(b *testing.B) {
 
 func benchReads[T any](b *testing.B, value T) {
 	b.Helper()
-	for _, shared := range []bool{false, true} {
-		b.Run(fmt.Sprint(shared), func(b *testing.B) {
-			p, e := memory.New(map[string]T{"key": value})
-			if e != nil {
-				b.Fatal(e)
-			}
-			m, e := manager.New(p)
-			if e != nil {
-				b.Fatal(e)
-			}
-			defer m.Close(b.Context())
-			for b.Loop() {
-				var s *kryptos.Secret[T]
-				if shared {
-					s, e = m.GetShared(b.Context(), "key")
-				} else {
-					s, e = m.Get(b.Context(), "key")
-				}
-				if e != nil {
-					b.Fatal(e)
-				}
-				if !shared {
-					s.Clear()
-				}
-			}
-		})
+	p, e := memory.New(map[string]T{"key": value})
+	if e != nil {
+		b.Fatal(e)
+	}
+	m, e := manager.New(p)
+	if e != nil {
+		b.Fatal(e)
+	}
+	defer m.Close(b.Context())
+	for b.Loop() {
+		s, e := m.Get(b.Context(), "key")
+		if e != nil {
+			b.Fatal(e)
+		}
+		s.Clear()
 	}
 }
+
 func BenchmarkCacheHits(b *testing.B) {
 	b.Run("string", func(b *testing.B) { benchReads(b, "value") })
 	b.Run("bytes", func(b *testing.B) { benchReads(b, make([]byte, 1024)) })

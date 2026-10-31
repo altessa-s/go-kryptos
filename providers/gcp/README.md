@@ -17,3 +17,6 @@ Payload copies returned by Get/List belong to the caller. Raw SDK errors and cod
 
 Credentials must be service-account JSON. WithClientOptions supports endpoint, connection, and authentication overrides for tests.
 WithClearCredentials explicitly clears the supplied credential slice after construction; otherwise it remains caller-owned.
+
+`PutResult` returns `WriteResult.Created` from backend existence before the write. `Put` discards that result. Close releases owned resources even with
+a canceled context.

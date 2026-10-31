@@ -76,7 +76,7 @@ func TestMalformedAndConflict(t *testing.T) {
 		name, body string
 		code       int
 		want       error
-	}{{"malformed", `{"data":{"data":{"unexpected":"x"},"metadata":{"version":1}}}`, 200, kryptos.ErrMalformed}, {"cas", `{"errors":["check-and-set mismatch"]}`, 400, kryptos.ErrConflict}, {"denied", `{"errors":["` + kryptostest.Canary + `"]}`, 403, kryptos.ErrUnavailable}} {
+	}{{"malformed", `{"data":{"data":{"unexpected":"x"},"metadata":{"version":1}}}`, 200, kryptos.ErrMalformed}, {"cas", `{"errors":["check-and-set mismatch"]}`, 400, kryptos.ErrConflict}, {"denied", `{"errors":["` + kryptostest.Canary + `"]}`, 403, kryptos.ErrPermissionDenied}} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			srv := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -97,4 +97,16 @@ func TestMalformedAndConflict(t *testing.T) {
 			require.NotContains(t, e.Error(), kryptostest.Canary)
 		})
 	}
+}
+
+func TestDeleteDoesNotDecodePayload(t *testing.T) {
+	t.Parallel()
+	c := newClient(t, &backend{data: map[string]*record{}})
+	writer, err := vault.New[string](c)
+	require.NoError(t, err)
+	require.NoError(t, writer.Put(t.Context(), "key", "value"))
+	reader, err := vault.New[string](c, vault.WithValueCodec[string](brokenCodec{panics: true}))
+	require.NoError(t, err)
+	require.NoError(t, reader.Delete(t.Context(), "key"))
+	require.ErrorIs(t, reader.Delete(t.Context(), "key"), kryptos.ErrNotFound)
 }

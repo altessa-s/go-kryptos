@@ -32,10 +32,13 @@ func (m *Manager[T]) Put(ctx context.Context, key string, value T) error {
 	defer unlock()
 	v := kryptos.NewSecret(key, value, nil, "")
 	defer v.Clear()
+	var result kryptos.WriteResult
 	e = m.policy.Do(ctx, func(work context.Context) error {
 		owned := v.Clone()
 		defer owned.Clear()
-		return m.p.Put(work, key, owned.Value)
+		var err error
+		result, err = m.p.PutResult(work, key, owned.Value)
+		return err
 	})
 	_, committed := errors.AsType[*kryptos.CommittedError](e)
 	if e != nil && !committed {
@@ -43,30 +46,40 @@ func (m *Manager[T]) Put(ctx context.Context, key string, value T) error {
 	}
 	m.group.Forget(key)
 	m.mu.Lock()
-	_, existed := m.versions[key]
+	if m.dirty != nil {
+		m.dirty[key] = true
+	}
 	m.cache.Remove(key)
 	m.mu.Unlock()
 	var filterErr error
 	if m.o.keyFilter != nil {
 		filterErr = m.o.keyFilter.Add(ctx, key)
+		if filterErr != nil {
+			m.o.metrics.FilterFailed()
+		}
 	}
 	fresh, readErr := m.fetch(ctx, key)
 	if readErr != nil {
 		fresh = v.Clone()
 	}
 	defer fresh.Clear()
+	clear(fresh.Encoded)
+	fresh.Encoded = nil
 	m.mu.Lock()
 	if !m.closed {
 		m.cache.Put(key, fresh.Clone())
 		m.versions[key] = fresh.Version
 		kind := kryptos.Created
-		if existed {
+		if !result.Created {
 			kind = kryptos.Updated
 		}
 		m.notify(kind, key, fresh)
 	}
 	m.mu.Unlock()
-	return errors.Join(e, filterErr, readErr)
+	if postErr := errors.Join(filterErr, readErr); postErr != nil {
+		return &kryptos.CommittedError{Err: errors.Join(e, postErr)}
+	}
+	return e
 }
 
 // Delete removes a backend value and every cached copy.
@@ -89,6 +102,9 @@ func (m *Manager[T]) Delete(ctx context.Context, key string) error {
 	}
 	m.group.Forget(key)
 	m.mu.Lock()
+	if m.dirty != nil {
+		m.dirty[key] = true
+	}
 	m.cache.Remove(key)
 	delete(m.versions, key)
 	if e == nil {

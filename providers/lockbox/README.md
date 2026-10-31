@@ -19,3 +19,6 @@ WithEndpoints and WithDialOptions configure the secret, payload, and operation s
 NewServiceAccountTokens copies the RSA key, signs PS256 JWTs, and exchanges them through an injected httpx.Doer. Responses are status-checked
 and bounded to 64 KiB. Refresh is shared and lifecycle-bound; callers wait for refresh once the early-refresh window begins. Close cancels
 refresh and clears owned key bytes. Strings containing IAM tokens are dropped, not overwritten.
+
+`PutResult` returns `WriteResult.Created` from backend existence before the write. `Put` discards that result. Close releases owned resources even with
+a canceled context.

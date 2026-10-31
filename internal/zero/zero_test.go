@@ -32,3 +32,22 @@ func TestClear(t *testing.T) {
 	zero.Clear(&s)
 	require.Empty(t, s)
 }
+
+func TestValueReceiverAndNamedBytes(t *testing.T) {
+	t.Parallel()
+	value := custom{data: []byte("secret")}
+	alias := value.data
+	zero.Clear(&value)
+	require.Equal(t, make([]byte, 6), alias)
+	type Key []byte
+	named := Key("secret")
+	alias = named
+	zero.Clear(&named)
+	require.Nil(t, named)
+	require.Equal(t, make([]byte, 6), alias)
+	type octet uint8
+	octets := []octet{1, 2, 3}
+	copy := octets
+	zero.Clear(&octets)
+	require.Equal(t, []octet{0, 0, 0}, copy)
+}

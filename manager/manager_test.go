@@ -41,7 +41,7 @@ func newManager(t *testing.T, opts ...manager.Option[[]byte]) (*manager.Manager[
 	t.Cleanup(func() { require.NoError(t, m.Close(context.WithoutCancel(t.Context()))) })
 	return m, p
 }
-func TestCacheClearing(t *testing.T) {
+func TestGetOwnershipAcrossInvalidation(t *testing.T) {
 	t.Parallel()
 	for _, action := range []string{"evict", "put", "delete", "purge", "close", "cycle"} {
 		t.Run(action, func(t *testing.T) {
@@ -49,7 +49,7 @@ func TestCacheClearing(t *testing.T) {
 			m, p := newManager(t, manager.WithCacheSize[[]byte](1))
 			ctx := t.Context()
 			require.NoError(t, m.Put(ctx, "key", []byte("old")))
-			old, e := m.GetShared(ctx, "key")
+			old, e := m.Get(ctx, "key")
 			require.NoError(t, e)
 			raw := old.Value
 			switch action {
@@ -67,8 +67,8 @@ func TestCacheClearing(t *testing.T) {
 				require.NoError(t, p.Put(ctx, "key", []byte("new")))
 				require.NoError(t, m.RunUpdateCycle(ctx))
 			}
-			require.Equal(t, []byte{0, 0, 0}, raw)
-			require.Nil(t, old.Value)
+			require.Equal(t, []byte("old"), raw)
+			old.Clear()
 		})
 	}
 }

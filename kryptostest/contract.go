@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -69,23 +70,30 @@ func RunProviderContract[T any](t *testing.T, newProvider func(testing.TB) krypt
 		require.ErrorIs(t, e, context.Canceled)
 		require.ErrorIs(t, p.Put(canceled, "key", value), context.Canceled)
 		require.ErrorIs(t, p.Delete(canceled, "key"), context.Canceled)
-		require.ErrorIs(t, p.Close(canceled), context.Canceled)
 		if caps.ReadOnly {
 			require.ErrorIs(t, p.Put(ctx, "key", value), kryptos.ErrReadOnly)
 			return
 		}
-		require.NoError(t, p.Put(ctx, "key", value))
+		input := kryptos.NewSecret("key", value, nil, "")
+		result, e := p.PutResult(ctx, "key", input.Value)
+		require.NoError(t, e)
+		require.True(t, result.Created)
+		mutateBytes(reflect.ValueOf(input.Value))
+		input.Clear()
 		first, e := p.Get(ctx, "key")
 		require.NoError(t, e)
 		require.Equal(t, value, first.Value)
 		require.NotEmpty(t, first.Version)
 		version := first.Version
+		mutateBytes(reflect.ValueOf(first.Value))
 		first.Clear()
 		second, e := p.Get(ctx, "key")
 		require.NoError(t, e)
 		require.Equal(t, value, second.Value)
 		second.Clear()
-		require.NoError(t, p.Put(ctx, "key", value))
+		result, e = p.PutResult(ctx, "key", value)
+		require.NoError(t, e)
+		require.False(t, result.Created)
 		third, e := p.Get(ctx, "key")
 		require.NoError(t, e)
 		require.NotEqual(t, version, third.Version)
@@ -98,8 +106,8 @@ func RunProviderContract[T any](t *testing.T, newProvider func(testing.TB) krypt
 		}
 		require.NoError(t, p.Delete(ctx, "key"))
 		require.ErrorIs(t, p.Delete(ctx, "key"), kryptos.ErrNotFound)
-		require.NoError(t, p.Close(ctx))
-		require.NoError(t, p.Close(ctx))
+		require.NoError(t, p.Close(canceled))
+		require.NoError(t, p.Close(canceled))
 		_, e = p.Get(ctx, "key")
 		require.ErrorIs(t, e, kryptos.ErrClosed)
 		require.ErrorIs(t, p.Ping(ctx), kryptos.ErrClosed)
@@ -111,35 +119,45 @@ func RunProviderContract[T any](t *testing.T, newProvider func(testing.TB) krypt
 }
 
 // RunCreationContract uses two independent providers sharing one backend.
-func RunCreationContract[T any](t *testing.T, pair func(testing.TB) (kryptos.Provider[T], kryptos.Provider[T]), caps Caps, value T) {
+func RunCreationContract[T any](t *testing.T, pair func(testing.TB) (kryptos.Provider[T], kryptos.Provider[T], func(string) int), caps Caps, value T) {
 	t.Helper()
 	t.Run("independent_creation", func(t *testing.T) {
 		t.Parallel()
-		a, b := pair(t)
+		a, b, versions := pair(t)
 		ctx := t.Context()
 		defer func() { require.NoError(t, a.Close(context.WithoutCancel(ctx))) }()
 		defer func() { require.NoError(t, b.Close(context.WithoutCancel(ctx))) }()
 		start := make(chan struct{})
-		results := make(chan error, 2)
+		type outcome struct {
+			provider kryptos.Provider[T]
+			err      error
+		}
+		results := make(chan outcome, 2)
 		var wg sync.WaitGroup
 		for _, p := range []kryptos.Provider[T]{a, b} {
-			wg.Go(func() { <-start; results <- p.Put(ctx, "concurrent", value) })
+			wg.Go(func() { <-start; results <- outcome{p, p.Put(ctx, "concurrent", value)} })
 		}
 		close(start)
 		wg.Wait()
 		close(results)
 		conflicts := 0
-		for e := range results {
+		var loser kryptos.Provider[T]
+		for result := range results {
+			e := result.err
 			if e != nil {
 				require.Equal(t, CheckAndSet, caps.WritePolicy)
 				require.ErrorIs(t, e, kryptos.ErrConflict)
 				conflicts++
+				loser = result.provider
 			}
 		}
 		require.LessOrEqual(t, conflicts, 1)
 		if conflicts > 0 {
-			require.NoError(t, b.Put(ctx, "concurrent", value))
+			require.Equal(t, 1, versions("concurrent"))
+			require.NoError(t, loser.Put(ctx, "concurrent", value))
 		}
+		const committedVersions = 2
+		require.Equal(t, committedVersions, versions("concurrent"))
 		all, e := a.List(ctx)
 		require.NoError(t, e)
 		require.Len(t, all, 1)
@@ -169,6 +187,14 @@ func (p *Provider[T]) Put(c context.Context, k string, v T) error {
 		return p.PutFunc(c, k, v)
 	}
 	return p.Backend.Put(c, k, v)
+}
+func (p *Provider[T]) PutResult(c context.Context, k string, v T) (kryptos.WriteResult, error) {
+	if p.PutFunc == nil {
+		return p.Backend.PutResult(c, k, v)
+	}
+	old, err := p.Backend.Get(c, k)
+	old.Clear()
+	return kryptos.WriteResult{Created: errors.Is(err, kryptos.ErrNotFound)}, p.PutFunc(c, k, v)
 }
 func (p *Provider[T]) List(c context.Context) ([]*kryptos.Secret[T], error) {
 	if p.ListFunc != nil {
@@ -256,4 +282,30 @@ func RunPutDeleteContract[T any](t *testing.T, pair func(testing.TB) (kryptos.Pr
 			s.Clear()
 		}
 	})
+}
+
+// mutateBytes exercises writable byte leaves in contract sample slices and structs.
+func mutateBytes(v reflect.Value) {
+	const byteMask = 0xff
+	if !v.IsValid() {
+		return
+	}
+	switch v.Kind() {
+	case reflect.Slice:
+		if v.Type().Elem().Kind() == reflect.Uint8 {
+			for i := range v.Len() {
+				if v.Index(i).CanSet() {
+					v.Index(i).SetUint(v.Index(i).Uint() ^ byteMask)
+				}
+			}
+		}
+	case reflect.Struct:
+		for i := range v.NumField() {
+			if v.Type().Field(i).IsExported() {
+				mutateBytes(v.Field(i))
+			}
+		}
+	default:
+		// Scalars are immutable; custom payload ownership belongs in provider-specific tests.
+	}
 }

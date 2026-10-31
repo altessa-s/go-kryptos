@@ -93,7 +93,7 @@ func (s *Storage[T]) Get(ctx context.Context, key string) (*kryptos.Secret[T], e
 	if e != nil {
 		return nil, kryptos.ErrValueDecoding
 	}
-	out := kryptos.NewSecret(key, value, b, strconv.Itoa(v.VersionMetadata.Version))
+	out := kryptos.NewSecret(key, value, nil, strconv.Itoa(v.VersionMetadata.Version))
 	zero.Clear(&value)
 	out.EncodedKey = path.Base(p)
 	return out, nil
@@ -142,22 +142,26 @@ func (s *Storage[T]) List(ctx context.Context) (out []*kryptos.Secret[T], err er
 	return out, nil
 }
 func (s *Storage[T]) Put(ctx context.Context, key string, value T) error {
+	_, err := s.PutResult(ctx, key, value)
+	return err
+}
+
+// PutResult writes a value and reports backend existence before the write.
+func (s *Storage[T]) PutResult(ctx context.Context, key string, value T) (result kryptos.WriteResult, err error) {
 	p, e := s.key(ctx, key)
 	if e != nil {
-		return e
+		return result, e
 	}
 	b, e := s.o.valueCodec.Encode(value)
 	if e != nil {
-		return kryptos.ErrValueEncoding
+		return result, kryptos.ErrValueEncoding
 	}
 	defer clear(b)
-	var meta *api.KVMetadata
-	if s.o.checkAndSet || s.o.destroyPreviousVersions {
-		meta, e = s.kv.GetMetadata(ctx, p)
-		if e != nil && !errors.Is(classify(e), kryptos.ErrNotFound) {
-			return classify(e)
-		}
+	meta, e := s.kv.GetMetadata(ctx, p)
+	if e != nil && !errors.Is(classify(e), kryptos.ErrNotFound) {
+		return result, classify(e)
 	}
+	result.Created = meta == nil
 	var opts []api.KVOption
 	if s.o.checkAndSet {
 		version := 0
@@ -168,7 +172,7 @@ func (s *Storage[T]) Put(ctx context.Context, key string, value T) error {
 	}
 	_, e = s.kv.Put(ctx, p, map[string]any{"data": string(b)}, opts...)
 	if e != nil {
-		return classify(e)
+		return result, classify(e)
 	}
 	if s.o.destroyPreviousVersions && meta != nil {
 		var versions []int
@@ -179,22 +183,21 @@ func (s *Storage[T]) Put(ctx context.Context, key string, value T) error {
 		}
 		if len(versions) > 0 {
 			if e = s.kv.Destroy(ctx, p, versions); e != nil {
-				return &kryptos.CommittedError{Err: kryptos.ErrCleanupFailed}
+				return result, &kryptos.CommittedError{Err: kryptos.ErrCleanupFailed}
 			}
 		}
 	}
-	return nil
+	return result, nil
 }
 func (s *Storage[T]) Delete(ctx context.Context, key string) error {
 	p, e := s.key(ctx, key)
 	if e != nil {
 		return e
 	}
-	v, e := s.Get(ctx, key)
+	_, e = s.kv.GetMetadata(ctx, p)
 	if e != nil {
-		return e
+		return classify(e)
 	}
-	v.Clear()
 	return classify(s.kv.DeleteMetadata(ctx, p))
 }
 func (s *Storage[T]) Ping(ctx context.Context) error {
@@ -205,9 +208,6 @@ func (s *Storage[T]) Ping(ctx context.Context) error {
 	return classify(e)
 }
 func (s *Storage[T]) Close(ctx context.Context) error {
-	if e := ctx.Err(); e != nil {
-		return e
-	}
 	s.closed.Store(true)
 	return nil
 }
@@ -222,6 +222,9 @@ func classify(e error) error {
 		return kryptos.ErrNotFound
 	}
 	if r, ok := errors.AsType[*api.ResponseError](e); ok {
+		if r.StatusCode == http.StatusForbidden || r.StatusCode == http.StatusUnauthorized {
+			return kryptos.ErrPermissionDenied
+		}
 		if r.StatusCode == http.StatusNotFound {
 			return kryptos.ErrNotFound
 		}
@@ -231,6 +234,7 @@ func classify(e error) error {
 					return kryptos.ErrConflict
 				}
 			}
+			return kryptos.ErrMalformed
 		}
 	}
 	return kryptos.ErrUnavailable

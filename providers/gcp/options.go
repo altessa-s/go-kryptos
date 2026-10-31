@@ -9,6 +9,8 @@ import (
 	"github.com/altessa-s/go-kryptos/codec"
 
 	"google.golang.org/api/option"
+
+	kryptos "github.com/altessa-s/go-kryptos"
 )
 
 type options[T any] struct {
@@ -18,4 +20,5 @@ type options[T any] struct {
 	labels            map[string]string
 	ignoreInvalidKeys bool
 	clearCredentials  bool
+	metrics           kryptos.Metrics
 }

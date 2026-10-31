@@ -5,11 +5,13 @@
 package kryptos_test
 
 import (
+	"encoding/json"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -88,6 +90,9 @@ func TestArchitecture(t *testing.T) {
 				continue
 			}
 			first, _, _ := strings.Cut(imp, "/")
+			if slices.Contains([]string{".", "codec", "internal/clone", "internal/zero"}, dir) && !strings.Contains(first, ".") {
+				require.Contains(t, []string{"context", "errors", "fmt", "io", "iter", "log/slog", "reflect", "slices", "strings", "sync", "time", "strconv", "encoding/json"}, imp, "domain stdlib import in %s", p)
+			}
 			if !strings.Contains(first, ".") {
 				if imp == "testing" {
 					require.Equal(t, "kryptostest", dir)
@@ -101,6 +106,26 @@ func TestArchitecture(t *testing.T) {
 			return nil
 		}
 		generated := strings.HasSuffix(p, "options_gen.go")
+		aliases := map[string]string{}
+		for _, imp := range f.Imports {
+			name, _ := strconv.Unquote(imp.Path.Value)
+			alias := filepath.Base(name)
+			if imp.Name != nil {
+				alias = imp.Name.Name
+			}
+			aliases[alias] = name
+		}
+		var realClock []*ast.FuncDecl
+		for _, decl := range f.Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok && dir == "." && fn.Recv != nil {
+				for _, r := range fn.Recv.List {
+					if id, ok := r.Type.(*ast.Ident); ok && id.Name == "RealClock" {
+						realClock = append(realClock, fn)
+					}
+				}
+			}
+		}
+
 		ast.Inspect(f, func(n ast.Node) bool {
 			switch v := n.(type) {
 			case *ast.FuncDecl:
@@ -136,7 +161,9 @@ func TestArchitecture(t *testing.T) {
 				if id, ok := v.X.(*ast.Ident); ok {
 					require.False(t, id.Name == "log" || id.Name == "fmt" && strings.HasPrefix(v.Sel.Name, "Print"), "direct logging in %s", p)
 					require.False(t, id.Name == "http" && v.Sel.Name == "DefaultClient", "%s", p)
-					require.False(t, id.Name == "time" && (v.Sel.Name == "Now" || v.Sel.Name == "Since") && dir != ".", "uninjected time: %s", p)
+					inClock := slices.ContainsFunc(realClock, func(fn *ast.FuncDecl) bool { return fn.Pos() <= v.Pos() && v.End() <= fn.End() })
+					require.False(t, aliases[id.Name] == "time" && slices.Contains([]string{"Now", "Since", "Sleep", "After", "NewTimer", "NewTicker", "Tick"}, v.Sel.Name) && !inClock, "uninjected time: %s", p)
+					require.False(t, aliases[id.Name] == "os" && slices.Contains([]string{"Getenv", "LookupEnv", "Environ", "ReadFile", "Open", "Create"}, v.Sel.Name) && dir != "kryptostest" && !strings.HasPrefix(dir, "devtools"), "configuration I/O: %s", p)
 				}
 			}
 			return true
@@ -157,17 +184,44 @@ func TestArchitecture(t *testing.T) {
 		require.True(t, modules[dir], "missing module %s", dir)
 	}
 }
-func TestRootModulePurity(t *testing.T) {
+func TestModulePurity(t *testing.T) {
 	t.Parallel()
-	b, e := os.ReadFile("go.mod")
-	require.NoError(t, e)
-	for line := range strings.SplitSeq(string(b), "\n") {
-		fields := strings.Fields(strings.TrimPrefix(strings.TrimSpace(line), "require "))
-		if len(fields) < 2 || !strings.HasPrefix(fields[1], "v") {
-			continue
+	for _, dir := range []string{".", "providers/vault", "providers/gcp", "providers/lockbox", "integration/docker", "devtools"} {
+		cmd := exec.CommandContext(t.Context(), "go", "mod", "edit", "-json")
+		cmd.Dir = dir
+		b, err := cmd.Output()
+		require.NoError(t, err)
+		var mod struct {
+			Require []struct {
+				Path     string
+				Indirect bool
+			}
+			Replace []struct {
+				Old, New struct{ Path, Version string }
+			}
 		}
-		dep := fields[0]
-		allowed := []string{"github.com/altessa-s/go-atlas-core", "github.com/hashicorp/golang-lru/v2", "github.com/stretchr/testify", "go.yaml.in/yaml/v3"}
-		require.True(t, slices.Contains(allowed, dep) || strings.HasPrefix(dep, "golang.org/x/"), "unexpected root dependency %s", dep)
+		require.NoError(t, json.Unmarshal(b, &mod))
+		if dir == "." {
+			for _, dep := range mod.Require {
+				if !dep.Indirect {
+					require.Contains(t, []string{"github.com/altessa-s/go-atlas-core", "github.com/hashicorp/golang-lru/v2", "github.com/stretchr/testify"}, dep.Path)
+				}
+			}
+		}
+		root, err := filepath.Abs(".")
+		require.NoError(t, err)
+		for _, replacement := range mod.Replace {
+			require.Empty(t, replacement.New.Version)
+			target, err := filepath.Abs(filepath.Join(dir, replacement.New.Path))
+			require.NoError(t, err)
+			expected := root
+			// The test-only Docker module must exercise this checkout's unreleased Vault module.
+			if dir == "integration/docker" && replacement.Old.Path == module+"/providers/vault" {
+				expected = filepath.Join(root, "providers/vault")
+			} else {
+				require.Equal(t, module, replacement.Old.Path)
+			}
+			require.Equal(t, expected, target)
+		}
 	}
 }

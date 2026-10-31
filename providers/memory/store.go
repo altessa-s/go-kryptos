@@ -74,23 +74,30 @@ func (s *Store[T]) List(ctx context.Context) ([]*kryptos.Secret[T], error) {
 	}
 	return out, nil
 }
-func (s *Store[T]) Put(ctx context.Context, key string, v T) error {
+func (s *Store[T]) Put(ctx context.Context, key string, value T) error {
+	_, err := s.PutResult(ctx, key, value)
+	return err
+}
+
+// PutResult writes a value and reports backend existence before the write.
+func (s *Store[T]) PutResult(ctx context.Context, key string, v T) (result kryptos.WriteResult, err error) {
 	if e := kryptos.ValidateKey(key); e != nil {
-		return e
+		return result, e
 	}
 	if e := kryptos.CheckPayload(v); e != nil {
-		return e
+		return result, e
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if e := s.check(ctx); e != nil {
-		return e
+		return result, e
 	}
 	s.version++
 	old := s.values[key]
+	result.Created = old == nil
 	s.values[key] = kryptos.NewSecret(key, v, nil, strconv.FormatUint(s.version, 10))
 	old.Clear()
-	return nil
+	return result, nil
 }
 func (s *Store[T]) Delete(ctx context.Context, key string) error {
 	if e := kryptos.ValidateKey(key); e != nil {
@@ -115,9 +122,6 @@ func (s *Store[T]) Ping(ctx context.Context) error {
 	return s.check(ctx)
 }
 func (s *Store[T]) Close(ctx context.Context) error {
-	if e := ctx.Err(); e != nil {
-		return e
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.closed = true

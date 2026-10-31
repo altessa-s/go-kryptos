@@ -50,7 +50,7 @@ func NewServiceAccountTokens(doer httpx.Doer, keyID, accountID string, pemKey []
 	}
 	o := newTokenOptions(opts...)
 	u, e := url.Parse(o.iamEndpoint)
-	if e != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || o.refreshBefore < 0 {
+	if e != nil || u.Host == "" || u.Scheme != "https" || o.refreshBefore < 0 {
 		return nil, kryptos.ErrInvalidOptions
 	}
 	if o.clock == nil {
@@ -83,7 +83,15 @@ func (t *ServiceAccountTokens) Token(ctx context.Context) (string, error) {
 		return v, nil
 	}
 	t.mu.Unlock()
-	return t.group.Do(ctx, "iam", func(work context.Context) (string, error) { return t.refresh(work) })
+	value, err := t.group.Do(ctx, "iam", func(work context.Context) (string, error) { return t.refresh(work) })
+	if err != nil && ctx.Err() == nil {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		if !t.closed && t.token != "" && t.o.clock.Now().Before(t.expires) {
+			return t.token, nil
+		}
+	}
+	return value, err
 }
 func (t *ServiceAccountTokens) refresh(ctx context.Context) (string, error) {
 	t.mu.Lock()
@@ -129,6 +137,9 @@ func (t *ServiceAccountTokens) refresh(ctx context.Context) (string, error) {
 		return "", kryptos.ErrMalformed
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized {
+		return "", kryptos.ErrPermissionDenied
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", kryptos.ErrUnavailable
 	}

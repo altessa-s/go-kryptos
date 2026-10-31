@@ -55,6 +55,8 @@ type Storage[T any] struct {
 	closed      atomic.Bool
 	once        sync.Once
 	closeErr    error
+	indexMu     sync.Mutex
+	index       map[string]string
 }
 
 func New[T any](ctx context.Context, folderID string, tokens TokenSource, opts ...Option[T]) (*Storage[T], error) {
@@ -84,7 +86,7 @@ func New[T any](ctx context.Context, folderID string, tokens TokenSource, opts .
 	dial := append([]grpc.DialOption{grpc.WithTransportCredentials(credentials.NewTLS(nil)),
 		grpc.WithPerRPCCredentials(rpcCredentials{tokens: tokens})},
 		o.dialOptions...)
-	s := &Storage[T]{folder: folderID, o: o}
+	s := &Storage[T]{folder: folderID, o: o, index: make(map[string]string)}
 	for _, endpoint := range []string{o.endpoints.Secret, o.endpoints.Payload, o.endpoints.Operation} {
 		conn, e := grpc.NewClient(endpoint, dial...)
 		if e != nil {
@@ -123,46 +125,6 @@ func (s *Storage[T]) key(ctx context.Context, key string) (string, error) {
 	}
 	return k, nil
 }
-func (s *Storage[T]) secrets(ctx context.Context) ([]*pb.Secret, error) {
-	var all []*pb.Secret
-	page := ""
-	seen := map[string]bool{}
-	for {
-		r, e := s.ss.List(ctx, &pb.ListSecretsRequest{FolderId: s.folder, PageToken: page, PageSize: listPageSize})
-		if e != nil {
-			return nil, classify(e)
-		}
-		for _, v := range r.GetSecrets() {
-			ok := v.GetStatus() == pb.Secret_ACTIVE
-			for k, want := range s.o.labels {
-				ok = ok && v.GetLabels()[k] == want
-			}
-			if ok {
-				all = append(all, v)
-			}
-		}
-		page = r.GetNextPageToken()
-		if page == "" {
-			return all, nil
-		}
-		if seen[page] {
-			return nil, kryptos.ErrMalformed
-		}
-		seen[page] = true
-	}
-}
-func (s *Storage[T]) find(ctx context.Context, key string) (*pb.Secret, error) {
-	all, e := s.secrets(ctx)
-	if e != nil {
-		return nil, e
-	}
-	for _, v := range all {
-		if v.Name == key {
-			return v, nil
-		}
-	}
-	return nil, kryptos.ErrNotFound
-}
 func (s *Storage[T]) Get(ctx context.Context, key string) (*kryptos.Secret[T], error) {
 	encoded, e := s.key(ctx, key)
 	if e != nil {
@@ -172,10 +134,20 @@ func (s *Storage[T]) Get(ctx context.Context, key string) (*kryptos.Secret[T], e
 	if e != nil {
 		return nil, e
 	}
-	meta, e = s.ss.Get(ctx, &pb.GetSecretRequest{SecretId: meta.Id})
-	if e != nil {
-		return nil, classify(e)
+	return s.payload(ctx, key, meta)
+}
+func (s *Storage[T]) matches(meta *pb.Secret) bool {
+	if meta.GetStatus() != pb.Secret_ACTIVE {
+		return false
 	}
+	for k, want := range s.o.labels {
+		if meta.GetLabels()[k] != want {
+			return false
+		}
+	}
+	return true
+}
+func (s *Storage[T]) payload(ctx context.Context, key string, meta *pb.Secret) (*kryptos.Secret[T], error) {
 	if meta.GetCurrentVersion() == nil {
 		return nil, kryptos.ErrNotFound
 	}
@@ -193,28 +165,35 @@ func (s *Storage[T]) Get(ctx context.Context, key string) (*kryptos.Secret[T], e
 		if e != nil {
 			return nil, kryptos.ErrValueDecoding
 		}
-		out := kryptos.NewSecret(key, v, b, payload.VersionId)
+		out := kryptos.NewSecret(key, v, nil, payload.VersionId)
 		zero.Clear(&v)
-		out.EncodedKey = encoded
+		out.EncodedKey = meta.Name
 		return out, nil
 	}
 	return nil, kryptos.ErrMalformed
 }
 func (s *Storage[T]) Put(ctx context.Context, key string, value T) error {
+	_, err := s.PutResult(ctx, key, value)
+	return err
+}
+
+// PutResult writes a value and reports backend existence before the write.
+func (s *Storage[T]) PutResult(ctx context.Context, key string, value T) (result kryptos.WriteResult, err error) {
 	encoded, e := s.key(ctx, key)
 	if e != nil {
-		return e
+		return result, e
 	}
 	b, e := s.o.valueCodec.Encode(value)
 	if e != nil {
-		return kryptos.ErrValueEncoding
+		return result, kryptos.ErrValueEncoding
 	}
 	defer clear(b)
 	entries := []*pb.PayloadEntryChange{{Key: "Data", Value: &pb.PayloadEntryChange_TextValue{TextValue: string(b)}}}
 	meta, e := s.find(ctx, encoded)
 	if e != nil && !errors.Is(e, kryptos.ErrNotFound) {
-		return e
+		return result, e
 	}
+	result.Created = meta == nil
 	if meta == nil {
 		op,
 			createErr := s.ss.Create(ctx,
@@ -225,18 +204,19 @@ func (s *Storage[T]) Put(ctx context.Context, key string, value T) error {
 				CreateVersion:         wrapperspb.Bool(true)})
 		e = s.await(ctx, op, createErr)
 		if e == nil {
-			return nil
+			return result, nil
 		}
 		if status.Code(e) != codes.AlreadyExists {
-			return classify(e)
+			return result, classify(e)
 		}
+		result.Created = false
 		meta, e = s.find(ctx, encoded)
 		if e != nil {
-			return e
+			return result, e
 		}
 	}
 	op, e := s.ss.AddVersion(ctx, &pb.AddVersionRequest{SecretId: meta.Id, PayloadEntries: entries})
-	return classify(s.await(ctx, op, e))
+	return result, classify(s.await(ctx, op, e))
 }
 func (s *Storage[T]) Delete(ctx context.Context, key string) error {
 	encoded, e := s.key(ctx, key)
@@ -248,7 +228,13 @@ func (s *Storage[T]) Delete(ctx context.Context, key string) error {
 		return e
 	}
 	op, e := s.ss.Delete(ctx, &pb.DeleteSecretRequest{SecretId: meta.Id})
-	return classify(s.await(ctx, op, e))
+	err := classify(s.await(ctx, op, e))
+	if err == nil || errors.Is(err, kryptos.ErrNotFound) {
+		s.indexMu.Lock()
+		delete(s.index, encoded)
+		s.indexMu.Unlock()
+	}
+	return err
 }
 func (s *Storage[T]) List(ctx context.Context) (out []*kryptos.Secret[T], err error) {
 	if e := s.check(ctx); e != nil {
@@ -267,6 +253,9 @@ func (s *Storage[T]) List(ctx context.Context) (out []*kryptos.Secret[T], err er
 		return nil, e
 	}
 	for _, meta := range all {
+		if !s.matches(meta) {
+			continue
+		}
 		key, e := s.o.keyCodec.Decode(meta.Name)
 		if e != nil || kryptos.ValidateKey(key) != nil {
 			if s.o.ignoreInvalidKeys {
@@ -274,7 +263,7 @@ func (s *Storage[T]) List(ctx context.Context) (out []*kryptos.Secret[T], err er
 			}
 			return out, kryptos.ErrKeyDecoding
 		}
-		v, e := s.Get(ctx, key)
+		v, e := s.payload(ctx, key, meta)
 		if errors.Is(e, kryptos.ErrNotFound) {
 			continue
 		}
@@ -293,9 +282,6 @@ func (s *Storage[T]) Ping(ctx context.Context) error {
 	return classify(e)
 }
 func (s *Storage[T]) Close(ctx context.Context) error {
-	if e := ctx.Err(); e != nil {
-		return e
-	}
 	s.once.Do(func() {
 		s.closed.Store(true)
 		for _, c := range s.connections {
@@ -313,12 +299,8 @@ func (s *Storage[T]) await(ctx context.Context, op *operation.Operation, err err
 	}
 	delay := operationPollMin
 	for !op.Done {
-		timer := time.NewTimer(delay)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return ctx.Err()
-		case <-timer.C:
+		if waitErr := (kryptos.RealClock{}).Wait(ctx, delay); waitErr != nil {
+			return waitErr
 		}
 		delay = min(delay*operationPollFactor, time.Second)
 		op, err = s.ops.Get(ctx, &operation.GetOperationRequest{OperationId: op.Id})
@@ -342,6 +324,12 @@ func classify(e error) error {
 		return e
 	}
 	switch status.Code(e) {
+	case codes.PermissionDenied, codes.Unauthenticated:
+		return kryptos.ErrPermissionDenied
+	case codes.InvalidArgument:
+		return kryptos.ErrMalformed
+	case codes.FailedPrecondition:
+		return kryptos.ErrFailedPrecondition
 	case codes.NotFound:
 		return kryptos.ErrNotFound
 	case codes.AlreadyExists, codes.Aborted:

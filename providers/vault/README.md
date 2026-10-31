@@ -26,3 +26,6 @@ A concurrent deletion can also invalidate a CAS version. Cleanup failure after a
 `Ping` calls token lookup-self, not sys/mounts. Applications need their KV data/metadata permissions and token lookup-self.
 History destruction requires additional destroy permissions only when explicitly enabled. Delete permanently removes metadata and versions.
 SDK-owned JSON strings cannot be cleared; caller-owned results and temporary byte buffers are cleared separately.
+
+`PutResult` returns `WriteResult.Created` from backend existence before the write. `Put` discards that result. Close releases owned resources even with
+a canceled context.

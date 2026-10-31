@@ -35,7 +35,7 @@ func (m *Manager[T]) Close(ctx context.Context) error {
 		m.cancel()
 		m.group.Close()
 		m.mu.Unlock()
-		go m.finishClose()
+		go m.finishClose(ctx)
 	})
 	select {
 	case <-ctx.Done():
@@ -44,7 +44,7 @@ func (m *Manager[T]) Close(ctx context.Context) error {
 		return m.closeErr
 	}
 }
-func (m *Manager[T]) finishClose() {
+func (m *Manager[T]) finishClose(ctx context.Context) {
 	m.active.Wait()
 	m.group.Wait()
 	m.mu.Lock()
@@ -55,7 +55,9 @@ func (m *Manager[T]) finishClose() {
 	}
 	clear(m.watchers)
 	m.mu.Unlock()
-	m.closeErr = m.p.Close(context.Background())
+	closeCtx, cancel := context.WithTimeout(ctx, m.o.cycleTimeout)
+	defer cancel()
+	m.closeErr = m.p.Close(closeCtx)
 	close(m.done)
 }
 

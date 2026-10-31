@@ -8,7 +8,9 @@ package docker_test
 
 import (
 	"context"
+	"net/http"
 	"net/netip"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -35,7 +37,7 @@ func TestVaultKV(t *testing.T) {
 	require.NoError(t, e)
 	cfg := api.DefaultConfig()
 	cfg.Address = addr
-	cfg.HttpClient = httpclient.New(httpclient.WithSSRFAllowedCIDRs(netip.MustParsePrefix("127.0.0.0/8")), httpclient.WithRetryMax(0))
+	cfg.HttpClient = httpclient.New(httpclient.WithSSRFAllowedCIDRs(netip.MustParsePrefix("127.0.0.0/8")), httpclient.WithRetryMax(0), httpclient.WithRetryPolicyHandler(func(_ context.Context, _ *http.Response, err error) (bool, error) { return false, err }))
 	client, e := api.NewClient(cfg)
 	require.NoError(t, e)
 	client.SetToken("integration-root-token")
@@ -46,14 +48,33 @@ func TestVaultKV(t *testing.T) {
 		require.NoError(tb, e)
 		return p
 	}, kryptostest.Caps{}, "value")
-	kryptostest.RunCreationContract(t, func(tb testing.TB) (kryptos.Provider[string], kryptos.Provider[string]) {
-		tb.Helper()
-		a, e := vault.New[string](client, vault.WithSecretPath[string]("concurrent"), vault.WithCheckAndSet[string]())
-		require.NoError(tb, e)
-		b, e := vault.New[string](client, vault.WithSecretPath[string]("concurrent"), vault.WithCheckAndSet[string]())
-		require.NoError(tb, e)
-		return a, b
-	}, kryptostest.Caps{WritePolicy: kryptostest.CheckAndSet}, "value")
+	for _, cas := range []bool{false, true} {
+		t.Run("creation-"+strconv.FormatBool(cas), func(t *testing.T) {
+			caps := kryptostest.Caps{}
+			if cas {
+				caps.WritePolicy = kryptostest.CheckAndSet
+			}
+			kryptostest.RunCreationContract(t, func(tb testing.TB) (kryptos.Provider[string], kryptos.Provider[string], func(string) int) {
+				tb.Helper()
+				opts := []vault.Option[string]{vault.WithSecretPath[string]("concurrent-" + strconv.FormatBool(cas))}
+				if cas {
+					opts = append(opts, vault.WithCheckAndSet[string]())
+				}
+				a, e := vault.New[string](client, opts...)
+				require.NoError(tb, e)
+				b, e := vault.New[string](client, opts...)
+				require.NoError(tb, e)
+				return a, b, func(key string) int {
+					value, e := a.Get(tb.Context(), key)
+					require.NoError(tb, e)
+					defer value.Clear()
+					count, e := strconv.Atoi(value.Version)
+					require.NoError(tb, e)
+					return count
+				}
+			}, caps, "value")
+		})
+	}
 	require.NoError(t, client.Sys().PutPolicyWithContext(ctx, "narrow", `path "kv/data/narrow/*" { capabilities = ["create", "read", "update", "delete"] }
 path "kv/metadata/narrow/*" { capabilities = ["read", "list", "delete"] }
 path "auth/token/lookup-self" { capabilities = ["read"] }`))

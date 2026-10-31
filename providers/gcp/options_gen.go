@@ -11,6 +11,8 @@ import (
 	"github.com/altessa-s/go-kryptos/codec"
 
 	"google.golang.org/api/option"
+
+	kryptos "github.com/altessa-s/go-kryptos"
 )
 
 // Option is a functional option for configuring options.
@@ -64,6 +66,13 @@ func WithKeyCodec[T any](v codec.KeyCodec) Option[T] {
 func WithLabels[T any](v map[string]string) Option[T] {
 	return func(o *options[T]) {
 		o.labels = v
+	}
+}
+
+// WithMetrics sets the metrics option.
+func WithMetrics[T any](v kryptos.Metrics) Option[T] {
+	return func(o *options[T]) {
+		o.metrics = v
 	}
 }
 

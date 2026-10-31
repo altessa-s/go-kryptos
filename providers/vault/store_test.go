@@ -160,7 +160,7 @@ func TestCreation(t *testing.T) {
 			if cas {
 				caps.WritePolicy = kryptostest.CheckAndSet
 			}
-			kryptostest.RunCreationContract(t, func(tb testing.TB) (kryptos.Provider[string], kryptos.Provider[string]) {
+			kryptostest.RunCreationContract(t, func(tb testing.TB) (kryptos.Provider[string], kryptos.Provider[string], func(string) int) {
 				tb.Helper()
 				b := &backend{data: map[string]*record{}}
 				c := newClient(tb, b)
@@ -172,7 +172,14 @@ func TestCreation(t *testing.T) {
 				require.NoError(tb, e)
 				other, e := vault.New[string](c, opts...)
 				require.NoError(tb, e)
-				return a, other
+				return a, other, func(key string) int {
+					value, e := a.Get(tb.Context(), key)
+					require.NoError(tb, e)
+					defer value.Clear()
+					count, e := strconv.Atoi(value.Version)
+					require.NoError(tb, e)
+					return count
+				}
 			}, caps, "value")
 		})
 	}
