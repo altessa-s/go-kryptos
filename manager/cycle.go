@@ -29,8 +29,10 @@ func (m *Manager[T]) update(ctx context.Context) (err error) {
 	defer cancel()
 	start := m.o.clock.Now()
 	defer func() { m.o.metrics.Cycled(m.o.clock.Now().Sub(start), err) }()
-	m.reconcile.Lock()
-	defer m.reconcile.Unlock()
+	m.mu.Lock()
+	m.dirty = make(map[string]bool)
+	m.mu.Unlock()
+	defer func() { m.mu.Lock(); m.dirty = nil; m.mu.Unlock() }()
 	values, err := m.listForCycle(ctx)
 	defer func() {
 		for _, s := range values {
@@ -43,6 +45,8 @@ func (m *Manager[T]) update(ctx context.Context) (err error) {
 	if err = m.validateListing(values); err != nil {
 		return err
 	}
+	m.reconcile.Lock()
+	defer m.reconcile.Unlock()
 	return m.reconcileListing(values)
 }
 func (m *Manager[T]) reconcileListing(values []*kryptos.Secret[T]) error {
@@ -62,6 +66,11 @@ func (m *Manager[T]) reconcileListing(values []*kryptos.Secret[T]) error {
 	seen := make(map[string]bool, len(values))
 	for _, s := range values {
 		seen[s.Key] = true
+		if m.dirty[s.Key] {
+			continue
+		}
+		clear(s.Encoded)
+		s.Encoded = nil
 		old, ok := m.versions[s.Key]
 		if ok && old == s.Version {
 			if _, cached := m.cache.Get(s.Key); !cached {
@@ -78,7 +87,7 @@ func (m *Manager[T]) reconcileListing(values []*kryptos.Secret[T]) error {
 		m.notify(kind, s.Key, s)
 	}
 	for key := range m.versions {
-		if !seen[key] {
+		if !seen[key] && !m.dirty[key] {
 			m.cache.Remove(key)
 			delete(m.versions, key)
 			m.notify(kryptos.Deleted, key, nil)

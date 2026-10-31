@@ -30,15 +30,10 @@ func (m *Manager[T]) Cached(key string) (*kryptos.Secret[T], error) {
 
 // Get returns an independent payload copy.
 func (m *Manager[T]) Get(ctx context.Context, key string) (*kryptos.Secret[T], error) {
-	return m.get(ctx, key, false)
+	return m.get(ctx, key)
 }
 
-// GetShared returns a borrowed read-only value, invalidated by any cache mutation.
-// The caller must externally serialize use against mutations; prefer Get.
-func (m *Manager[T]) GetShared(ctx context.Context, key string) (*kryptos.Secret[T], error) {
-	return m.get(ctx, key, true)
-}
-func (m *Manager[T]) get(ctx context.Context, key string, shared bool) (*kryptos.Secret[T], error) {
+func (m *Manager[T]) get(ctx context.Context, key string) (*kryptos.Secret[T], error) {
 	if e := kryptos.ValidateKey(key); e != nil {
 		return nil, e
 	}
@@ -47,25 +42,27 @@ func (m *Manager[T]) get(ctx context.Context, key string, shared bool) (*kryptos
 		return nil, e
 	}
 	defer end()
-	for {
+	for attempt := 0; ; attempt++ {
 		m.mu.Lock()
 		v, ok := m.cache.Get(key)
 		if ok {
-			if !shared {
-				v = v.Clone()
-			}
+			v = v.Clone()
 			m.mu.Unlock()
 			m.o.metrics.CacheHit()
 			return v, nil
 		}
+		_, known := m.versions[key]
 		m.mu.Unlock()
+		if attempt == maxCacheAttempts {
+			return m.fetchOwned(ctx, key)
+		}
 		m.o.metrics.CacheMiss()
 		if m.o.keyFilter != nil {
 			exists, err := m.o.keyFilter.MightExist(ctx, key)
 			if err != nil {
 				m.o.logger.DebugContext(ctx, "secret filter failed", "key", key)
-				m.o.metrics.Fetched(0, kryptos.ErrMalformed)
-			} else if !exists {
+				m.o.metrics.FilterFailed()
+			} else if !exists && !known {
 				return nil, kryptos.ErrNotFound
 			}
 		}
@@ -132,7 +129,34 @@ func (m *Manager[T]) fetchIntoCache(work context.Context, key string) (_ struct{
 	if m.closed {
 		return struct{}{}, kryptos.ErrClosed
 	}
+	clear(s.Encoded)
+	s.Encoded = nil
 	m.cache.Put(key, s.Clone())
 	m.versions[key] = s.Version
 	return struct{}{}, nil
 }
+
+// fetchOwned bounds cache-contention retries without handing a cache-owned value to a waiter.
+func (m *Manager[T]) fetchOwned(ctx context.Context, key string) (out *kryptos.Secret[T], err error) {
+	defer func() {
+		if recover() != nil {
+			out.Clear()
+			out = nil
+			err = kryptos.ErrPanicked
+		}
+	}()
+	m.reconcile.RLock()
+	defer m.reconcile.RUnlock()
+	unlock := m.keys.Lock(key)
+	defer unlock()
+	s, err := m.fetch(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	defer s.Clear()
+	clear(s.Encoded)
+	s.Encoded = nil
+	return s.Clone(), nil
+}
+
+const maxCacheAttempts = 3

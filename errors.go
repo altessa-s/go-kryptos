@@ -8,6 +8,8 @@ import "errors"
 
 // Domain errors never include secret payloads.
 var (
+	ErrPermissionDenied        = errors.New("secret access denied")
+	ErrFailedPrecondition      = errors.New("secret precondition failed")
 	ErrUnavailable             = errors.New("secret backend unavailable")
 	ErrNotFound                = errors.New("secret not found")
 	ErrInvalidKey              = errors.New("invalid secret key")
@@ -29,5 +31,5 @@ var (
 // CommittedError reports failure after a write has committed. Do not retry the write.
 type CommittedError struct{ Err error }
 
-func (e *CommittedError) Error() string { return "secret committed: cleanup failed" }
+func (e *CommittedError) Error() string { return "secret committed: post-write operation failed" }
 func (e *CommittedError) Unwrap() error { return e.Err }

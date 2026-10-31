@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/altessa-s/go-kryptos/codec/base64key"
 	"github.com/altessa-s/go-kryptos/kryptostest"
 	"github.com/altessa-s/go-kryptos/providers/gcp"
 	"github.com/altessa-s/go-kryptos/providers/gcp/fake"
@@ -41,10 +42,14 @@ func TestContract(t *testing.T) {
 }
 func TestCreation(t *testing.T) {
 	t.Parallel()
-	kryptostest.RunCreationContract(t, func(tb testing.TB) (kryptos.Provider[string], kryptos.Provider[string]) {
+	kryptostest.RunCreationContract(t, func(tb testing.TB) (kryptos.Provider[string], kryptos.Provider[string], func(string) int) {
 		tb.Helper()
 		server := fake.New()
-		return provider(tb, server), provider(tb, server)
+		return provider(tb, server), provider(tb, server), func(key string) int {
+			encoded, e := base64key.New().Encode(key)
+			require.NoError(tb, e)
+			return server.Versions("projects/test-project/secrets/" + encoded)
+		}
 	}, kryptostest.Caps{}, "value")
 }
 func TestInvalidCredentials(t *testing.T) {

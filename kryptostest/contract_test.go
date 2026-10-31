@@ -6,6 +6,7 @@ package kryptostest_test
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -25,11 +26,18 @@ func TestContractSuite(t *testing.T) {
 		require.NoError(tb, e)
 		return p
 	}, kryptostest.Caps{}, "value")
-	kryptostest.RunCreationContract(t, func(tb testing.TB) (kryptos.Provider[string], kryptos.Provider[string]) {
+	kryptostest.RunCreationContract(t, func(tb testing.TB) (kryptos.Provider[string], kryptos.Provider[string], func(string) int) {
 		tb.Helper()
 		p, e := memory.New[string](nil)
 		require.NoError(tb, e)
-		return &kryptostest.Provider[string]{Backend: p}, &kryptostest.Provider[string]{Backend: p}
+		return &kryptostest.Provider[string]{Backend: p}, &kryptostest.Provider[string]{Backend: p}, func(key string) int {
+			value, e := p.Get(tb.Context(), key)
+			require.NoError(tb, e)
+			defer value.Clear()
+			count, e := strconv.Atoi(value.Version)
+			require.NoError(tb, e)
+			return count
+		}
 	}, kryptostest.Caps{}, "value")
 }
 func TestFakeOverrides(t *testing.T) {

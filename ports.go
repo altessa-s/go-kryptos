@@ -31,10 +31,14 @@ type Provider[T any] interface {
 	Getter[T]
 	Lister[T]
 	Writer[T]
+	PutResult(context.Context, string, T) (WriteResult, error)
 	Name() string
 	Ping(context.Context) error
 	Close(context.Context) error
 }
+
+// WriteResult records whether the backend existed before a committed write.
+type WriteResult struct{ Created bool }
 
 // KeyFilter is an advisory existence index.
 type KeyFilter interface {
@@ -56,6 +60,8 @@ type FilterDeleter interface {
 type Metrics interface {
 	CacheHit()
 	CacheMiss()
+	FilterFailed()
+	Skipped()
 	Fetched(time.Duration, error)
 	Cycled(time.Duration, error)
 	CacheSize(int)
@@ -68,6 +74,18 @@ type Clock interface{ Now() time.Time }
 type RealClock struct{}
 
 func (RealClock) Now() time.Time { return time.Now() }
+
+// Wait waits until the delay elapses or the caller cancels.
+func (RealClock) Wait(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
 
 // HealthStatus describes manager availability.
 type HealthStatus int

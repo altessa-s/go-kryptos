@@ -16,7 +16,6 @@ import (
 )
 
 // Secret owns its payload. Do not copy the struct or mutate it concurrently.
-// GetShared values are borrowed and may be cleared by any manager mutation.
 type Secret[T any] struct {
 	Key        string `json:"key"`
 	EncodedKey string `json:"encoded_key"`

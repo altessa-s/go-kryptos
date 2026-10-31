@@ -45,6 +45,7 @@ type Manager[T any] struct {
 	empty     int
 	watchers  map[*Subscription[T]]struct{}
 	versions  map[string]string
+	dirty     map[string]bool
 }
 
 // New constructs a manager without starting a background update loop.
@@ -90,16 +91,29 @@ func retryable(e error) bool {
 		return false
 	}
 	for _, terminal := range []error{kryptos.ErrConflict, kryptos.ErrNotFound, kryptos.ErrInvalidKey, kryptos.ErrClosed,
-		kryptos.ErrPanicked, kryptos.ErrReadOnly, kryptos.ErrUncloneablePayload} {
+		kryptos.ErrPanicked, kryptos.ErrReadOnly, kryptos.ErrUncloneablePayload, kryptos.ErrMalformed, kryptos.ErrInvalidOptions,
+		kryptos.ErrPermissionDenied, kryptos.ErrFailedPrecondition, kryptos.ErrKeyEncoding, kryptos.ErrKeyDecoding,
+		kryptos.ErrValueEncoding, kryptos.ErrValueDecoding, context.Canceled, context.DeadlineExceeded} {
 		if errors.Is(e, terminal) {
 			return false
 		}
 	}
-	return true
+	if errors.Is(e, kryptos.ErrUnavailable) {
+		return true
+	}
+	if transient, ok := errors.AsType[interface {
+		error
+		Temporary() bool
+	}](e); ok {
+		return transient.Temporary()
+	}
+	return false
 }
 
 type noMetrics struct{}
 
+func (noMetrics) Skipped()                     {}
+func (noMetrics) FilterFailed()                {}
 func (noMetrics) CacheHit()                    {}
 func (noMetrics) CacheMiss()                   {}
 func (noMetrics) Fetched(time.Duration, error) {}

@@ -114,22 +114,29 @@ func (s *Storage[T]) Get(ctx context.Context, key string) (*kryptos.Secret[T], e
 	if e != nil {
 		return nil, kryptos.ErrValueDecoding
 	}
-	out := kryptos.NewSecret(key, value, v.Payload.Data, v.Name)
+	out := kryptos.NewSecret(key, value, nil, v.Name)
 	zero.Clear(&value)
 	out.EncodedKey = path.Base(name)
 	return out, nil
 }
 func (s *Storage[T]) Put(ctx context.Context, key string, value T) error {
+	_, err := s.PutResult(ctx, key, value)
+	return err
+}
+
+// PutResult writes a value and reports backend existence before the write.
+func (s *Storage[T]) PutResult(ctx context.Context, key string, value T) (result kryptos.WriteResult, err error) {
 	name, e := s.key(ctx, key)
 	if e != nil {
-		return e
+		return result, e
 	}
 	b, e := s.o.valueCodec.Encode(value)
 	if e != nil {
-		return kryptos.ErrValueEncoding
+		return result, kryptos.ErrValueEncoding
 	}
 	defer clear(b)
 	_, e = s.client.GetSecret(ctx, &pb.GetSecretRequest{Name: name})
+	result.Created = status.Code(e) == codes.NotFound
 	if status.Code(e) == codes.NotFound {
 		_,
 			e = s.client.CreateSecret(ctx,
@@ -138,14 +145,15 @@ func (s *Storage[T]) Put(ctx context.Context, key string, value T) error {
 				Secret: &pb.Secret{Labels: s.o.labels,
 					Replication: &pb.Replication{Replication: &pb.Replication_Automatic_{Automatic: &pb.Replication_Automatic{}}}}})
 		if status.Code(e) == codes.AlreadyExists {
+			result.Created = false
 			e = nil
 		}
 	}
 	if e != nil {
-		return classify(e)
+		return result, classify(e)
 	}
 	_, e = s.client.AddSecretVersion(ctx, &pb.AddSecretVersionRequest{Parent: name, Payload: &pb.SecretPayload{Data: b}})
-	return classify(e)
+	return result, classify(e)
 }
 func (s *Storage[T]) Delete(ctx context.Context, key string) error {
 	name, e := s.key(ctx, key)
@@ -183,7 +191,10 @@ func (s *Storage[T]) List(ctx context.Context) (out []*kryptos.Secret[T], err er
 			return out, kryptos.ErrKeyDecoding
 		}
 		v, e := s.Get(ctx, key)
-		if errors.Is(e, kryptos.ErrNotFound) {
+		if errors.Is(e, kryptos.ErrNotFound) || errors.Is(e, kryptos.ErrFailedPrecondition) {
+			if s.o.metrics != nil {
+				s.o.metrics.Skipped()
+			}
 			continue
 		}
 		if e != nil {
@@ -203,9 +214,6 @@ func (s *Storage[T]) Ping(ctx context.Context) error {
 	return classify(e)
 }
 func (s *Storage[T]) Close(ctx context.Context) error {
-	if e := ctx.Err(); e != nil {
-		return e
-	}
 	s.once.Do(func() { s.closed.Store(true); s.closeErr = s.client.Close() })
 	return s.closeErr
 }
@@ -214,6 +222,12 @@ func classify(e error) error {
 		return nil
 	}
 	switch status.Code(e) {
+	case codes.PermissionDenied, codes.Unauthenticated:
+		return kryptos.ErrPermissionDenied
+	case codes.InvalidArgument:
+		return kryptos.ErrMalformed
+	case codes.FailedPrecondition:
+		return kryptos.ErrFailedPrecondition
 	case codes.NotFound:
 		return kryptos.ErrNotFound
 	case codes.AlreadyExists, codes.Aborted:

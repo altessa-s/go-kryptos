@@ -30,9 +30,10 @@ import (
 
 // Server stores unique secret names and complete version histories.
 type Server struct {
-	mu       sync.Mutex
-	secrets  map[string]*entry
-	sequence int
+	mu                  sync.Mutex
+	secrets             map[string]*entry
+	sequence            int
+	lists, payloadReads int
 }
 type entry struct {
 	secret   *pb.Secret
@@ -119,6 +120,7 @@ func (s *Server) serve(listener net.Listener,
 func (s *secrets) List(context.Context, *pb.ListSecretsRequest) (*pb.ListSecretsResponse, error) {
 	s.b.mu.Lock()
 	defer s.b.mu.Unlock()
+	s.b.lists++
 	r := &pb.ListSecretsResponse{}
 	for _, e := range s.b.secrets {
 		r.Secrets = append(r.Secrets, proto.CloneOf(e.secret))
@@ -181,6 +183,7 @@ func (s *secrets) Delete(_ context.Context, r *pb.DeleteSecretRequest) (*operati
 func (s *payloads) Get(_ context.Context, r *pb.GetPayloadRequest) (*pb.Payload, error) {
 	s.b.mu.Lock()
 	defer s.b.mu.Unlock()
+	s.b.payloadReads++
 	for _, e := range s.b.secrets {
 		if e.secret.Id == r.SecretId {
 			for _, p := range e.payloads {
@@ -206,4 +209,18 @@ func (s *Server) Versions(name string) int {
 		return len(e.payloads)
 	}
 	return 0
+}
+
+// Counts returns listing and payload RPC counts.
+func (s *Server) Counts() (int, int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lists, s.payloadReads
+}
+
+// Deactivate changes the status of a secret to exercise write policy.
+func (s *Server) Deactivate(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.secrets[name].secret.Status = pb.Secret_INACTIVE
 }

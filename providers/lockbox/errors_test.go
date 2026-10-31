@@ -72,7 +72,7 @@ func TestRPCClassification(t *testing.T) {
 	for _, tc := range []struct {
 		code codes.Code
 		want error
-	}{{codes.Aborted, kryptos.ErrConflict}, {codes.PermissionDenied, kryptos.ErrUnavailable}, {codes.Canceled, context.Canceled}, {codes.DeadlineExceeded, context.DeadlineExceeded}} {
+	}{{codes.Unauthenticated, kryptos.ErrPermissionDenied}, {codes.InvalidArgument, kryptos.ErrMalformed}, {codes.FailedPrecondition, kryptos.ErrFailedPrecondition}, {codes.Aborted, kryptos.ErrConflict}, {codes.PermissionDenied, kryptos.ErrPermissionDenied}, {codes.Canceled, context.Canceled}, {codes.DeadlineExceeded, context.DeadlineExceeded}} {
 		t.Run(tc.code.String(), func(t *testing.T) {
 			t.Parallel()
 			server := fake.New()

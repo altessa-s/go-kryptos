@@ -27,7 +27,7 @@ func TestTokenOptionsAndValidation(t *testing.T) {
 	t.Parallel()
 	pemKey := key(t)
 	doer := httpx.DoerFunc(func(*http.Request) (*http.Response, error) { return nil, errors.New("transport failed") })
-	for _, opts := range [][]lockbox.TokenOption{{lockbox.WithIAMEndpoint(":bad")}, {lockbox.WithRefreshBefore(-time.Second)}} {
+	for _, opts := range [][]lockbox.TokenOption{{lockbox.WithIAMEndpoint("http://iam.example.test/tokens")}, {lockbox.WithIAMEndpoint(":bad")}, {lockbox.WithRefreshBefore(-time.Second)}} {
 		_, e := lockbox.NewServiceAccountTokens(doer, "key", "account", pemKey, opts...)
 		require.ErrorIs(t, e, kryptos.ErrInvalidOptions)
 	}

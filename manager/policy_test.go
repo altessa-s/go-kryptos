@@ -48,12 +48,14 @@ func (f *filter) Rebuild(ctx context.Context, load func(context.Context) iter.Se
 	return nil
 }
 
-type metrics struct{ hits, misses, fetched, cycled, sizes atomic.Int32 }
+type metrics struct{ hits, misses, fetched, cycled, sizes, filterFailed atomic.Int32 }
 
 func (m *metrics) CacheHit()                    { m.hits.Add(1) }
 func (m *metrics) CacheMiss()                   { m.misses.Add(1) }
 func (m *metrics) Fetched(time.Duration, error) { m.fetched.Add(1) }
 func (m *metrics) Cycled(time.Duration, error)  { m.cycled.Add(1) }
+func (m *metrics) Skipped()                     {}
+func (m *metrics) FilterFailed()                { m.filterFailed.Add(1) }
 func (m *metrics) CacheSize(int)                { m.sizes.Add(1) }
 func TestFiltersMetricsAndHealth(t *testing.T) {
 	t.Parallel()
@@ -76,6 +78,7 @@ func TestFiltersMetricsAndHealth(t *testing.T) {
 		require.EqualValues(t, 1, f.adds.Load())
 		require.Zero(t, f.deletes.Load())
 		require.EqualValues(t, 1, f.rebuilds.Load())
+		require.EqualValues(t, 1, stats.filterFailed.Load())
 		require.Positive(t, stats.fetched.Load())
 		require.Positive(t, stats.sizes.Load())
 	})

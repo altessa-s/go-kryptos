@@ -20,8 +20,10 @@ defer secret.Clear()
 use(secret.Value)
 ```
 
-The snippet uses `context`, `providers/memory`, and `manager`. Constructors receive mandatory collaborators positionally and generated options for tunables.
-Consumers schedule `RunUpdateCycle`; the library starts no periodic update loop. `Warm` returns joined failures. `Close` cancels and drains admitted work.
+The snippet uses `context`, `providers/memory`, and `manager`. Constructors receive mandatory collaborators positionally and generated options for
+tunables.
+Consumers schedule `RunUpdateCycle`; the library starts no periodic update loop. `Warm` returns joined failures. `Close` cancels and drains admitted
+work.
 
 ## Packages and modules
 
@@ -44,7 +46,6 @@ Cloud SDK dependencies stay in provider modules. Testify v1.12.1 and its indirec
 
 `Get`, `Cached`, and provider methods return independent caller-owned secrets. `Put` gives the provider an independent copy.
 The manager clears evicted, replaced, purged, and deleted cache entries. Subscribers own delivered events and must call `event.Clear()`.
-Dropped and undelivered events are cleared by the subscription. `GetShared` is borrowed; serialize use against invalidating operations or use `Get`.
 
 Clearing overwrites byte slices and invokes `Zeroize()` on cooperating payloads. Strings are dropped, never modified in place.
 SDK-owned strings, serialized requests, and runtime copies are outside the clearing guarantee. Prefer `[]byte` for high-value secrets.
@@ -56,9 +57,12 @@ Formatting and structured logging redact Secret payloads; JSON excludes both dec
 |---|---|
 | `nil` | Write committed successfully |
 | `ErrConflict` | CAS rejected the write; the caller decides whether to retry |
-| `*CommittedError` wrapping `ErrCleanupFailed` | Write committed, cleanup failed; do not retry the write |
+| `*CommittedError` | Write committed, but cleanup, read-back, or filter maintenance failed; do not retry the write |
 
-The manager refreshes the cache, updates the filter, and emits a change event before returning a committed cleanup error.
+The manager refreshes the cache, updates the filter, and emits a change event before returning a committed error. `PutResult` reports whether the
+provider found an existing backend key.
+Permission and authentication failures return `ErrPermissionDenied`; invalid arguments return `ErrMalformed`; failed preconditions return
+`ErrFailedPrecondition`. These and codec errors are terminal.
 Vault preserves historical versions by default. GCP and Lockbox resolve concurrent first creation using backend name uniqueness and add versions.
 
 ## Verification

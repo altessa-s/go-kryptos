@@ -101,9 +101,10 @@ func TestCycleNoOverlapAndMutation(t *testing.T) {
 		entered := make(chan struct{})
 		release := make(chan struct{})
 		p := &kryptostest.Provider[string]{Backend: base, ListFunc: func(ctx context.Context) ([]*kryptos.Secret[string], error) {
+			values, err := base.List(ctx)
 			close(entered)
 			<-release
-			return base.List(ctx)
+			return values, err
 		}}
 		m, e := manager.New[string](p)
 		require.NoError(t, e)
@@ -112,7 +113,7 @@ func TestCycleNoOverlapAndMutation(t *testing.T) {
 		wg.Go(func() { require.NoError(t, m.RunUpdateCycle(t.Context())) })
 		<-entered
 		require.NoError(t, m.RunUpdateCycle(t.Context()))
-		wg.Go(func() { require.NoError(t, m.Put(t.Context(), "key", "new")) })
+		require.NoError(t, m.Put(t.Context(), "key", "new"))
 		close(release)
 		wg.Wait()
 		s, e := m.Get(t.Context(), "key")

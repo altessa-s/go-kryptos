@@ -68,7 +68,13 @@ func TestMalformedBackendPayloads(t *testing.T) {
 				switch req.(type) {
 				case *pb.GetSecretRequest:
 					if mode == "no-version" {
-						return &pb.Secret{}, nil
+						result, err := next(ctx, req)
+						if err != nil {
+							return nil, err
+						}
+						meta := result.(*pb.Secret)
+						meta.CurrentVersion = nil
+						return meta, nil
 					}
 					if mode == "metadata-error" {
 						return nil, status.Error(codes.PermissionDenied, "denied")
@@ -95,7 +101,7 @@ func TestMalformedBackendPayloads(t *testing.T) {
 			case "missing-data":
 				require.ErrorIs(t, e, kryptos.ErrMalformed)
 			default:
-				require.ErrorIs(t, e, kryptos.ErrUnavailable)
+				require.ErrorIs(t, e, kryptos.ErrPermissionDenied)
 			}
 		})
 	}

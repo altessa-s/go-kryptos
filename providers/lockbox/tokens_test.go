@@ -82,3 +82,31 @@ func TestIAMRefresh(t *testing.T) {
 		require.EqualValues(t, 2, calls.Load())
 	})
 }
+
+func TestRefreshFailureKeepsUnexpiredToken(t *testing.T) {
+	t.Parallel()
+	pemKey := key(t)
+	synctest.Test(t, func(t *testing.T) {
+		var calls atomic.Int32
+		doer := httpx.DoerFunc(func(*http.Request) (*http.Response, error) {
+			if calls.Add(1) > 1 {
+				return &http.Response{StatusCode: 503, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+			}
+			body := fmt.Sprintf(`{"iamToken":"cached","expiresAt":%q}`, time.Now().Add(2*time.Minute).Format(time.RFC3339))
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body))}, nil
+		})
+		source, err := lockbox.NewServiceAccountTokens(doer, "key", "account", pemKey)
+		require.NoError(t, err)
+		defer source.Close(t.Context())
+		token, err := source.Token(t.Context())
+		require.NoError(t, err)
+		require.Equal(t, "cached", token)
+		time.Sleep(90 * time.Second)
+		token, err = source.Token(t.Context())
+		require.NoError(t, err)
+		require.Equal(t, "cached", token)
+		time.Sleep(31 * time.Second)
+		_, err = source.Token(t.Context())
+		require.ErrorIs(t, err, kryptos.ErrUnavailable)
+	})
+}
