@@ -20,3 +20,6 @@ WithClearCredentials explicitly clears the supplied credential slice after const
 
 `PutResult` returns `WriteResult.Created` from backend existence before the write. `Put` discards that result. Close releases owned resources even with
 a canceled context.
+
+Ambiguous `AddSecretVersion` RPC failures return `kryptos.ErrIndeterminate`, including lost responses, cancellation, and deadlines after dispatch.
+Definitive backend rejections keep their error classes. Reconcile backend state before issuing another write; do not automatically replay it.

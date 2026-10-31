@@ -42,15 +42,12 @@ func (m *Manager[T]) Put(ctx context.Context, key string, value T) error {
 	})
 	_, committed := errors.AsType[*kryptos.CommittedError](e)
 	if e != nil && !committed {
+		if errors.Is(e, kryptos.ErrIndeterminate) {
+			m.invalidateWrite(key)
+		}
 		return e
 	}
-	m.group.Forget(key)
-	m.mu.Lock()
-	if m.dirty != nil {
-		m.dirty[key] = true
-	}
-	m.cache.Remove(key)
-	m.mu.Unlock()
+	m.invalidateWrite(key)
 	var filterErr error
 	if m.o.keyFilter != nil {
 		filterErr = m.o.keyFilter.Add(ctx, key)
@@ -65,18 +62,8 @@ func (m *Manager[T]) Put(ctx context.Context, key string, value T) error {
 	defer fresh.Clear()
 	clear(fresh.Encoded)
 	fresh.Encoded = nil
-	m.mu.Lock()
-	if !m.closed {
-		m.cache.Put(key, fresh.Clone())
-		m.versions[key] = fresh.Version
-		kind := kryptos.Created
-		if !result.Created {
-			kind = kryptos.Updated
-		}
-		m.notify(kind, key, fresh)
-	}
-	m.mu.Unlock()
-	if postErr := errors.Join(filterErr, readErr); postErr != nil {
+	installErr := m.installWrite(key, fresh, result)
+	if postErr := errors.Join(filterErr, readErr, installErr); postErr != nil {
 		return &kryptos.CommittedError{Err: errors.Join(e, postErr)}
 	}
 	return e
@@ -101,18 +88,50 @@ func (m *Manager[T]) Delete(ctx context.Context, key string) error {
 		return e
 	}
 	m.group.Forget(key)
+	m.removeDeleted(key, e == nil)
+	if m.o.filterRebuilder == nil && m.o.filterDeleter != nil {
+		e = errors.Join(e, m.o.filterDeleter.Delete(ctx, key))
+	}
+	return e
+}
+
+// invalidateWrite also bypasses a possibly stale negative filter after an unknown outcome.
+func (m *Manager[T]) invalidateWrite(key string) {
+	m.group.Forget(key)
 	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.dirty != nil {
+		m.dirty[key] = true
+	}
+	m.cache.Remove(key)
+	m.versions[key] = ""
+}
+
+func (m *Manager[T]) installWrite(key string, fresh *kryptos.Secret[T], result kryptos.WriteResult) (err error) {
+	defer recoverClone(&err)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.closed {
+		m.cache.Put(key, fresh.Clone())
+		m.versions[key] = fresh.Version
+		kind := kryptos.Created
+		if !result.Created {
+			kind = kryptos.Updated
+		}
+		m.notify(kind, key, fresh)
+	}
+	return nil
+}
+
+func (m *Manager[T]) removeDeleted(key string, notify bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.dirty != nil {
 		m.dirty[key] = true
 	}
 	m.cache.Remove(key)
 	delete(m.versions, key)
-	if e == nil {
+	if notify {
 		m.notify(kryptos.Deleted, key, nil)
 	}
-	m.mu.Unlock()
-	if m.o.filterRebuilder == nil && m.o.filterDeleter != nil {
-		e = errors.Join(e, m.o.filterDeleter.Delete(ctx, key))
-	}
-	return e
 }

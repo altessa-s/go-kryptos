@@ -47,14 +47,7 @@ func (m *Manager[T]) Close(ctx context.Context) error {
 func (m *Manager[T]) finishClose(ctx context.Context) {
 	m.active.Wait()
 	m.group.Wait()
-	m.mu.Lock()
-	m.cache.Purge()
-	clear(m.versions)
-	for s := range m.watchers {
-		s.close()
-	}
-	clear(m.watchers)
-	m.mu.Unlock()
+	m.clearOwned()
 	closeCtx, cancel := context.WithTimeout(ctx, m.o.cycleTimeout)
 	defer cancel()
 	m.closeErr = m.p.Close(closeCtx)
@@ -78,3 +71,14 @@ func (m *Manager[T]) Purge(ctx context.Context) error {
 
 // Len returns the number of cached keys.
 func (m *Manager[T]) Len() int { m.mu.Lock(); defer m.mu.Unlock(); return m.cache.Len() }
+
+func (m *Manager[T]) clearOwned() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.cache.Purge()
+	clear(m.versions)
+	for s := range m.watchers {
+		s.close()
+	}
+	clear(m.watchers)
+}

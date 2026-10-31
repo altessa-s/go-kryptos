@@ -158,7 +158,7 @@ func (s *Storage[T]) PutResult(ctx context.Context, key string, value T) (result
 		return result, classify(e)
 	}
 	_, e = s.client.AddSecretVersion(ctx, &pb.AddSecretVersionRequest{Parent: name, Payload: &pb.SecretPayload{Data: b}})
-	return result, classify(e)
+	return result, classifyMutation(e)
 }
 func (s *Storage[T]) Delete(ctx context.Context, key string) error {
 	name, e := s.key(ctx, key)

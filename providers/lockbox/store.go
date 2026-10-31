@@ -215,6 +215,9 @@ func (s *Storage[T]) PutResult(ctx context.Context, key string, value T) (result
 				Labels:                s.o.labels,
 				VersionPayloadEntries: entries,
 				CreateVersion:         wrapperspb.Bool(true)})
+		if createErr != nil && status.Code(createErr) != codes.AlreadyExists {
+			return result, classifyMutation(createErr)
+		}
 		e = s.await(ctx, op, createErr)
 		if e == nil {
 			return result, nil
@@ -229,7 +232,10 @@ func (s *Storage[T]) PutResult(ctx context.Context, key string, value T) (result
 		}
 	}
 	op, e := s.ss.AddVersion(ctx, &pb.AddVersionRequest{SecretId: meta.Id, PayloadEntries: entries})
-	return result, classify(s.await(ctx, op, e))
+	if e != nil {
+		return result, classifyMutation(e)
+	}
+	return result, classify(s.await(ctx, op, nil))
 }
 func (s *Storage[T]) Delete(ctx context.Context, key string) error {
 	encoded, e := s.key(ctx, key)
