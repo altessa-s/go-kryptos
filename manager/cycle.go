@@ -39,10 +39,14 @@ func (m *Manager[T]) update(ctx context.Context) (err error) {
 			s.Clear()
 		}
 	}()
-	if err != nil {
-		return err
+	if err == nil {
+		err = m.validateListing(values)
 	}
-	if err = m.validateListing(values); err != nil {
+	if err != nil {
+		// Only consecutive successful empty listings count toward the threshold.
+		m.mu.Lock()
+		m.empty = 0
+		m.mu.Unlock()
 		return err
 	}
 	m.reconcile.Lock()
@@ -113,7 +117,9 @@ func (m *Manager[T]) Warm(ctx context.Context, keys ...string) error {
 }
 
 func (m *Manager[T]) listForCycle(ctx context.Context) (values []*kryptos.Secret[T], err error) {
-	load := func(work context.Context) error { var e error; values, e = m.p.List(work); return e }
+	load := func(ctx context.Context) error {
+		return m.policy.Do(ctx, func(work context.Context) error { var e error; values, e = m.p.List(work); return e })
+	}
 	if m.o.filterRebuilder != nil {
 		err = m.o.filterRebuilder.Rebuild(ctx, func(work context.Context) iter.Seq2[string, error] {
 			return func(yield func(string, error) bool) {
