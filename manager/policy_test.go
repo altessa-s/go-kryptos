@@ -203,3 +203,46 @@ func TestFetchMalformedAndReadBackRetry(t *testing.T) {
 	_, e = m.Cached("a")
 	require.ErrorIs(t, e, kryptos.ErrInvalidKey)
 }
+func TestUpdateCycleRetriesListing(t *testing.T) {
+	t.Parallel()
+	base, e := memory.New(map[string]string{"key": "value"})
+	require.NoError(t, e)
+	var calls atomic.Int32
+	p := &kryptostest.Provider[string]{Backend: base, ListFunc: func(ctx context.Context) ([]*kryptos.Secret[string], error) {
+		if calls.Add(1) == 1 {
+			return nil, kryptos.ErrUnavailable
+		}
+		return base.List(ctx)
+	}}
+	m, e := manager.New[string](p, manager.WithMaxRetries[string](2), manager.WithBackoff[string](func(int, error) time.Duration { return time.Millisecond }))
+	require.NoError(t, e)
+	defer m.Close(t.Context())
+	require.NoError(t, m.RunUpdateCycle(t.Context()))
+	require.Equal(t, int32(2), calls.Load())
+	require.Equal(t, 1, m.Len())
+}
+func TestEmptyThresholdResetsOnFailedListing(t *testing.T) {
+	t.Parallel()
+	base, e := memory.New(map[string]string{"key": "value"})
+	require.NoError(t, e)
+	var fail atomic.Bool
+	p := &kryptostest.Provider[string]{Backend: base, ListFunc: func(ctx context.Context) ([]*kryptos.Secret[string], error) {
+		if fail.Load() {
+			return nil, kryptos.ErrPermissionDenied
+		}
+		return base.List(ctx)
+	}}
+	m, e := manager.New[string](p, manager.WithEmptyListingThreshold[string](2))
+	require.NoError(t, e)
+	defer m.Close(t.Context())
+	require.NoError(t, m.RunUpdateCycle(t.Context()))
+	require.NoError(t, base.Delete(t.Context(), "key"))
+	require.NoError(t, m.RunUpdateCycle(t.Context()))
+	fail.Store(true)
+	require.ErrorIs(t, m.RunUpdateCycle(t.Context()), kryptos.ErrPermissionDenied)
+	fail.Store(false)
+	require.NoError(t, m.RunUpdateCycle(t.Context()))
+	require.Equal(t, 1, m.Len())
+	require.NoError(t, m.RunUpdateCycle(t.Context()))
+	require.Zero(t, m.Len())
+}
