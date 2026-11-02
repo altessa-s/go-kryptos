@@ -14,8 +14,8 @@ github.com/altessa-s/go-atlas-core v0.3.1 h1:/xSTFoK6pka/x+bJ1mqHHkEFOOhpRN/2gOZ
 github.com/altessa-s/go-atlas-core v0.3.1/go.mod h1:xOKuQewGd1wO3llziO2K6CUUtr3FHGnJHUMRUIOCaHw=
 github.com/altessa-s/go-atlas-net v0.2.1 h1:9ueKILfiP/x7dYjekpz2Wlabmvagp9XN8lrqMxpsby8=
 github.com/altessa-s/go-atlas-net v0.2.1/go.mod h1:hxckjfE7N3z/tWbDi1ychR66dG1Dy47XNVJ3Z295Z0I=
-github.com/altessa-s/go-nomos v0.2.0 h1:TIMeQyLy/MaxH8BOR97WayBxcVNGnmTNmpQMec6D90s=
-github.com/altessa-s/go-nomos v0.2.0/go.mod h1:xAERMIOxBttPYU2436ChQr5KfzmODgwxIIK/XX8AmVY=
+github.com/altessa-s/go-nomos v0.2.1 h1:maevBhl0NEEIqgjC4fZ0iBpej69WRBd9NwvTHBbUXYs=
+github.com/altessa-s/go-nomos v0.2.1/go.mod h1:xAERMIOxBttPYU2436ChQr5KfzmODgwxIIK/XX8AmVY=
 github.com/altessa-s/ozzo-rules v1.16.0 h1:mJzL3NtaZABm8ksskQHqf77k1U2X9xwOfxFi6cQey1E=
 github.com/altessa-s/ozzo-rules v1.16.0/go.mod h1:aPGlyfaTaoJsOMitbdf5Dd408bvGe9/TP4hB5CmtPAs=
 github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 h1:DklsrG3dyBCFEj5IhUbnKptjxatkF07cF2ak3yi77so=

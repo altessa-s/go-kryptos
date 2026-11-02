@@ -8,7 +8,7 @@ require (
 	github.com/altessa-s/go-atlas-net v0.2.1
 	github.com/altessa-s/go-kryptos v0.1.2
 	github.com/altessa-s/go-kryptos/providers/vault v0.0.0
-	github.com/altessa-s/go-nomos v0.2.0
+	github.com/altessa-s/go-nomos v0.2.1
 	github.com/hashicorp/vault/api v1.23.0
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go v0.44.0
