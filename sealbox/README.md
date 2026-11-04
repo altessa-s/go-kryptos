@@ -14,7 +14,7 @@ caller-chosen associated data.
 |-------------------------|--------------------------------------------------------------------------------------------------------------|
 | `New(current, prev...)` | Builds a `*Box`; an empty current key returns a nil box (no error): `Seal`/`Open` fail with `ErrNoKey`, `Current`/`Opens` report false |
 | `Box.Seal(p, aad)`      | Encrypts with the current key and a fresh random nonce                                                       |
-| `Box.Open(s, aad)`      | Decrypts with the key named by `s.KeyID`; `ErrUnknownKey` for a key not configured, `ErrOpen` otherwise      |
+| `Box.Open(s, aad)`      | Decrypts with the key named by `s.KeyID`; `ErrNoKey` for a box without keys, `ErrUnknownKey` for a key not configured, `ErrOpen` when the value does not open |
 | `Box.Current(s)`        | Whether `s` was sealed with the current key (re-seal values that are not)                                   |
 | `Box.Opens(s)`          | Whether the box holds the key `s` was sealed with (no authentication)                                       |
 | `Sealed`                | `KeyID`, `Nonce`, `Ciphertext` — store all three; `Set()` reports a non-empty value                          |
