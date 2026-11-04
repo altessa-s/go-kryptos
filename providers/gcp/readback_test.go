@@ -30,19 +30,28 @@ func (panicDecoder) Decode([]byte) (string, error)   { panic(kryptostest.Canary)
 
 func TestCommittedWriteDecoderPanic(t *testing.T) {
 	t.Parallel()
+
 	server := fake.New()
 	conn, closeServer, err := server.Connect()
 	require.NoError(t, err)
+
 	defer closeServer()
+
 	p, err := gcp.New[string](t.Context(), "test-project", []byte(`{"type":"service_account"}`), gcp.WithClientOptions[string](option.WithGRPCConn(conn)), gcp.WithValueCodec[string](panicDecoder{}))
 	require.NoError(t, err)
+
 	var logs bytes.Buffer
+
 	m, err := manager.New(p, manager.WithLogger[string](slog.New(slog.NewTextHandler(&logs, nil))))
+
 	require.NoError(t, err)
 	defer m.Close(t.Context())
+
 	sub, err := m.Watch(t.Context(), manager.WithSkipInitial())
 	require.NoError(t, err)
+
 	defer sub.Close()
+
 	for _, want := range []kryptos.EventType{kryptos.Created, kryptos.Updated} {
 		err = m.Put(t.Context(), "key", "value")
 		require.ErrorIs(t, err, kryptos.ErrPanicked)
@@ -53,6 +62,7 @@ func TestCommittedWriteDecoderPanic(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "value", got.Value)
 		got.Clear()
+
 		select {
 		case event := <-sub.Events():
 			require.Equal(t, want, event.Type)
@@ -62,5 +72,6 @@ func TestCommittedWriteDecoderPanic(t *testing.T) {
 			t.Fatal("missing committed write event")
 		}
 	}
+
 	require.NotContains(t, logs.String(), kryptostest.Canary)
 }

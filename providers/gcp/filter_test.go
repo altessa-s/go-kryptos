@@ -32,15 +32,19 @@ func FuzzLabelFilter(f *testing.F) {
 				require.NotContains(t, r.Filter, " OR ")
 				require.NotContains(t, r.Filter, " AND ")
 			}
+
 			return next(ctx, req)
 		}))
 		require.NoError(t, e)
+
 		defer stop()
+
 		p, e := gcp.New[string](t.Context(), "test-project", []byte(`{"type":"service_account"}`), gcp.WithLabels[string](map[string]string{k: v}), gcp.WithClientOptions[string](option.WithGRPCConn(conn)))
 		if e != nil {
 			return
 		}
 		defer p.Close(t.Context())
+
 		_, e = p.List(t.Context())
 		require.NoError(t, e)
 	})

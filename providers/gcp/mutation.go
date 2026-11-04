@@ -17,6 +17,7 @@ func classifyMutation(err error) error {
 	if err == nil {
 		return nil
 	}
+
 	switch status.Code(err) {
 	case codes.PermissionDenied, codes.Unauthenticated, codes.InvalidArgument,
 		codes.FailedPrecondition, codes.NotFound, codes.AlreadyExists, codes.Aborted,

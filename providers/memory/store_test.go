@@ -19,13 +19,16 @@ func TestContracts(t *testing.T) {
 	t.Parallel()
 	kryptostest.RunProviderContract(t, func(tb testing.TB) kryptos.Provider[[]byte] {
 		tb.Helper()
+
 		s, e := memory.New[[]byte](nil)
 		require.NoError(tb, e)
+
 		return s
 	}, kryptostest.Caps{}, []byte("value"))
 }
 func TestConstructor(t *testing.T) {
 	t.Parallel()
+
 	_, e := memory.New(map[string]string{"a": "x"})
 	require.ErrorIs(t, e, kryptos.ErrInvalidKey)
 	_, e = memory.New(map[string]any{"key": make(chan int)})

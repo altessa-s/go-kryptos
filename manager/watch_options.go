@@ -11,7 +11,9 @@ import kryptos "github.com/altessa-s/go-kryptos"
 type OverflowPolicy int
 
 const (
+	// DropNewest discards the incoming event.
 	DropNewest OverflowPolicy = iota
+	// DropOldest discards the oldest buffered event.
 	DropOldest
 )
 

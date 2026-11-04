@@ -34,17 +34,20 @@ func (f *filter) MightExist(context.Context, string) (bool, error) {
 	if f.fail {
 		return false, kryptos.ErrUnavailable
 	}
+
 	return !f.missing, nil
 }
 func (f *filter) Add(context.Context, string) error    { f.adds.Add(1); return nil }
 func (f *filter) Delete(context.Context, string) error { f.deletes.Add(1); return nil }
 func (f *filter) Rebuild(ctx context.Context, load func(context.Context) iter.Seq2[string, error]) error {
 	f.rebuilds.Add(1)
+
 	for _, e := range load(ctx) {
 		if e != nil {
 			return e
 		}
 	}
+
 	return nil
 }
 
@@ -62,11 +65,14 @@ func TestFiltersMetricsAndHealth(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		p, e := memory.New(map[string]string{"key": "value"})
 		require.NoError(t, e)
+
 		f := &filter{fail: true}
 		stats := &metrics{}
 		m, e := manager.New(p, manager.WithKeyFilter[string](f), manager.WithFilterRebuilder[string](f), manager.WithFilterDeleter[string](f), manager.WithMetrics[string](stats), manager.WithClock[string](kryptos.RealClock{}), manager.WithLogger[string](slog.New(slog.NewTextHandler(io.Discard, nil))), manager.WithStaleAfter[string](time.Minute), manager.WithCycleTimeout[string](time.Second), manager.WithCacheShards[string](2), manager.WithCacheSize[string](4))
+
 		require.NoError(t, e)
 		defer m.Close(t.Context())
+
 		v, e := m.Get(t.Context(), "key")
 		require.NoError(t, e)
 		v.Clear()
@@ -85,12 +91,16 @@ func TestFiltersMetricsAndHealth(t *testing.T) {
 }
 func TestFilterMissingAndDelete(t *testing.T) {
 	t.Parallel()
+
 	p, e := memory.New[string](nil)
 	require.NoError(t, e)
+
 	f := &filter{missing: true}
 	m, e := manager.New(p, manager.WithKeyFilter[string](f), manager.WithFilterDeleter[string](f))
+
 	require.NoError(t, e)
 	defer m.Close(t.Context())
+
 	_, e = m.Get(t.Context(), "missing")
 	require.ErrorIs(t, e, kryptos.ErrNotFound)
 	require.NoError(t, m.Put(t.Context(), "key", "value"))
@@ -102,16 +112,21 @@ func TestRetryAndCAS(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		base, e := memory.New(map[string]string{"key": "value"})
 		require.NoError(t, e)
+
 		var gets, puts atomic.Int32
+
 		p := &kryptostest.Provider[string]{Backend: base, GetFunc: func(ctx context.Context, key string) (*kryptos.Secret[string], error) {
 			if gets.Add(1) == 1 {
 				return nil, kryptos.ErrUnavailable
 			}
+
 			return base.Get(ctx, key)
 		}, PutFunc: func(context.Context, string, string) error { puts.Add(1); return kryptos.ErrConflict }}
 		m, e := manager.New[string](p, manager.WithMaxRetries[string](2), manager.WithBackoff[string](func(int, error) time.Duration { return time.Second }))
+
 		require.NoError(t, e)
 		defer m.Close(t.Context())
+
 		v, e := m.Get(t.Context(), "key")
 		require.NoError(t, e)
 		v.Clear()
@@ -122,15 +137,20 @@ func TestRetryAndCAS(t *testing.T) {
 }
 func TestConstructorValidation(t *testing.T) {
 	t.Parallel()
+
 	p, e := memory.New[string](nil)
 	require.NoError(t, e)
+
 	for _, o := range []manager.Option[string]{manager.WithCacheSize[string](0), manager.WithCacheShards[string](0), manager.WithCacheShards[string](2000), manager.WithMaxRetries[string](-1), manager.WithEmptyListingThreshold[string](0), manager.WithCycleTimeout[string](0), manager.WithStaleAfter[string](0)} {
 		_, e := manager.New(p, o)
 		require.ErrorIs(t, e, kryptos.ErrInvalidOptions)
 	}
+
 	_, e = manager.New[string](nil)
 	require.ErrorIs(t, e, kryptos.ErrInvalidOptions)
+
 	var typed *memory.Store[string]
+
 	_, e = manager.New[string](typed)
 	require.ErrorIs(t, e, kryptos.ErrInvalidOptions)
 	unsafe, e := memory.New[func()](nil)
@@ -149,10 +169,12 @@ func TestWatchValidationAndCancellation(t *testing.T) {
 			_, e := m.Watch(t.Context(), opts...)
 			require.Error(t, e)
 		}
+
 		require.NoError(t, m.Put(t.Context(), "key", []byte("initial")))
 		ctx, cancel := context.WithCancel(t.Context())
 		s, e := m.Watch(ctx, manager.WithWatchKeys("key", "other"), manager.WithWatchTypes(kryptos.Created, kryptos.Updated))
 		require.NoError(t, e)
+
 		event := <-s.Events()
 		require.Equal(t, kryptos.Created, event.Type)
 		event.Clear()
@@ -168,11 +190,14 @@ func TestWatchValidationAndCancellation(t *testing.T) {
 }
 func TestUpdateFailuresAndEmptyThreshold(t *testing.T) {
 	t.Parallel()
+
 	base, e := memory.New(map[string]string{"key": "value"})
 	require.NoError(t, e)
 	m, e := manager.New(base, manager.WithEmptyListingThreshold[string](2))
+
 	require.NoError(t, e)
 	defer m.Close(t.Context())
+
 	require.NoError(t, m.RunUpdateCycle(t.Context()))
 	require.NoError(t, base.Delete(t.Context(), "key"))
 	require.NoError(t, m.RunUpdateCycle(t.Context()))
@@ -182,12 +207,16 @@ func TestUpdateFailuresAndEmptyThreshold(t *testing.T) {
 }
 func TestFetchMalformedAndReadBackRetry(t *testing.T) {
 	t.Parallel()
+
 	base, e := memory.New[string](nil)
 	require.NoError(t, e)
+
 	p := &kryptostest.Provider[string]{Backend: base, GetFunc: func(context.Context, string) (*kryptos.Secret[string], error) { return nil, nil }}
 	m, e := manager.New[string](p)
+
 	require.NoError(t, e)
 	defer m.Close(t.Context())
+
 	_, e = m.Get(t.Context(), "key")
 	require.ErrorIs(t, e, kryptos.ErrMalformed)
 	require.ErrorIs(t, m.Put(t.Context(), "key", "fallback"), kryptos.ErrMalformed)
@@ -195,6 +224,7 @@ func TestFetchMalformedAndReadBackRetry(t *testing.T) {
 	require.NoError(t, e)
 	require.Equal(t, "fallback", v.Value)
 	v.Clear()
+
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	require.True(t, errors.Is(m.Purge(ctx), context.Canceled))
@@ -205,36 +235,48 @@ func TestFetchMalformedAndReadBackRetry(t *testing.T) {
 }
 func TestUpdateCycleRetriesListing(t *testing.T) {
 	t.Parallel()
+
 	base, e := memory.New(map[string]string{"key": "value"})
 	require.NoError(t, e)
+
 	var calls atomic.Int32
+
 	p := &kryptostest.Provider[string]{Backend: base, ListFunc: func(ctx context.Context) ([]*kryptos.Secret[string], error) {
 		if calls.Add(1) == 1 {
 			return nil, kryptos.ErrUnavailable
 		}
+
 		return base.List(ctx)
 	}}
 	m, e := manager.New[string](p, manager.WithMaxRetries[string](2), manager.WithBackoff[string](func(int, error) time.Duration { return time.Millisecond }))
+
 	require.NoError(t, e)
 	defer m.Close(t.Context())
+
 	require.NoError(t, m.RunUpdateCycle(t.Context()))
 	require.Equal(t, int32(2), calls.Load())
 	require.Equal(t, 1, m.Len())
 }
 func TestEmptyThresholdResetsOnFailedListing(t *testing.T) {
 	t.Parallel()
+
 	base, e := memory.New(map[string]string{"key": "value"})
 	require.NoError(t, e)
+
 	var fail atomic.Bool
+
 	p := &kryptostest.Provider[string]{Backend: base, ListFunc: func(ctx context.Context) ([]*kryptos.Secret[string], error) {
 		if fail.Load() {
 			return nil, kryptos.ErrPermissionDenied
 		}
+
 		return base.List(ctx)
 	}}
 	m, e := manager.New[string](p, manager.WithEmptyListingThreshold[string](2))
+
 	require.NoError(t, e)
 	defer m.Close(t.Context())
+
 	require.NoError(t, m.RunUpdateCycle(t.Context()))
 	require.NoError(t, base.Delete(t.Context(), "key"))
 	require.NoError(t, m.RunUpdateCycle(t.Context()))

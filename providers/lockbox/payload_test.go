@@ -25,11 +25,13 @@ import (
 
 func typedProvider[T any](tb testing.TB) kryptos.Provider[T] {
 	tb.Helper()
+
 	server := fake.New()
 	dial, stop := server.Connect()
 	tb.Cleanup(stop)
 	p, e := lockbox.New[T](tb.Context(), "folder", tokens{}, lockbox.WithDialOptions[T](dial...), lockbox.WithEndpoints[T](lockbox.Endpoints{Secret: "passthrough:///secret", Payload: "passthrough:///payload", Operation: "passthrough:///operation"}))
 	require.NoError(tb, e)
+
 	return p
 }
 func TestPayloadTypes(t *testing.T) {
@@ -40,6 +42,7 @@ func TestPayloadTypes(t *testing.T) {
 	})
 	t.Run("struct", func(t *testing.T) {
 		t.Parallel()
+
 		type payload struct {
 			Password string
 			Data     []byte
@@ -54,16 +57,20 @@ func TestManagerContract(t *testing.T) {
 		tb.Helper()
 		m, e := manager.New(typedProvider[string](tb))
 		require.NoError(tb, e)
+
 		return m
 	}, "value")
 }
 
 func TestMalformedBackendPayloads(t *testing.T) {
 	t.Parallel()
+
 	for _, mode := range []string{"no-version", "metadata-error", "payload-error", "missing-data", "missing-format", "text-fallback"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
+
 			server := fake.New()
+
 			dial, stop := server.Connect(grpc.UnaryInterceptor(func(ctx context.Context, req any, info *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {
 				switch req.(type) {
 				case *pb.GetSecretRequest:
@@ -72,10 +79,13 @@ func TestMalformedBackendPayloads(t *testing.T) {
 						if err != nil {
 							return nil, err
 						}
+
 						meta := result.(*pb.Secret)
 						meta.CurrentVersion = nil
+
 						return meta, nil
 					}
+
 					if mode == "metadata-error" {
 						return nil, status.Error(codes.PermissionDenied, "denied")
 					}
@@ -83,24 +93,32 @@ func TestMalformedBackendPayloads(t *testing.T) {
 					if mode == "payload-error" {
 						return nil, status.Error(codes.PermissionDenied, "denied")
 					}
+
 					if mode == "text-fallback" {
 						return &pb.Payload{VersionId: "external", Entries: []*pb.Payload_Entry{{Key: "Data", Value: &pb.Payload_Entry_TextValue{TextValue: `"external"`}}}}, nil
 					}
+
 					if mode == "missing-format" {
 						return &pb.Payload{Entries: []*pb.Payload_Entry{{Key: "Data"}}}, nil
 					}
+
 					if mode == "missing-data" {
 						return &pb.Payload{Entries: []*pb.Payload_Entry{{Key: "other"}}}, nil
 					}
 				}
+
 				return next(ctx, req)
 			}))
 			defer stop()
+
 			p, e := lockbox.New[string](t.Context(), "folder", tokens{}, lockbox.WithDialOptions[string](dial...), lockbox.WithEndpoints[string](lockbox.Endpoints{Secret: "passthrough:///secret", Payload: "passthrough:///payload", Operation: "passthrough:///operation"}))
+
 			require.NoError(t, e)
 			defer p.Close(t.Context())
+
 			require.NoError(t, p.Put(t.Context(), "key", "value"))
 			got, e := p.Get(t.Context(), "key")
+
 			switch mode {
 			case "no-version":
 				require.ErrorIs(t, e, kryptos.ErrNotFound)

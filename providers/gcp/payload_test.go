@@ -21,12 +21,14 @@ import (
 
 func typedProvider[T any](tb testing.TB) kryptos.Provider[T] {
 	tb.Helper()
+
 	server := fake.New()
 	conn, stop, e := server.Connect()
 	require.NoError(tb, e)
 	tb.Cleanup(stop)
 	p, e := gcp.New[T](tb.Context(), "test-project", []byte(`{"type":"service_account"}`), gcp.WithClientOptions[T](option.WithGRPCConn(conn)))
 	require.NoError(tb, e)
+
 	return p
 }
 func TestPayloadTypes(t *testing.T) {
@@ -37,6 +39,7 @@ func TestPayloadTypes(t *testing.T) {
 	})
 	t.Run("struct", func(t *testing.T) {
 		t.Parallel()
+
 		type payload struct {
 			Password string
 			Data     []byte
@@ -51,6 +54,7 @@ func TestManagerContract(t *testing.T) {
 		tb.Helper()
 		m, e := manager.New(typedProvider[string](tb))
 		require.NoError(tb, e)
+
 		return m
 	}, "value")
 }

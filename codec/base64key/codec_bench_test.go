@@ -17,6 +17,7 @@ func BenchmarkRoundTrip(b *testing.B) {
 		if e != nil {
 			b.Fatal(e)
 		}
+
 		if _, e = c.Decode(v); e != nil {
 			b.Fatal(e)
 		}

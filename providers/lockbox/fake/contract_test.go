@@ -27,14 +27,17 @@ func TestMain(m *testing.M) {
 	if kryptostest.GoroutineLeaks() != nil {
 		code = 1
 	}
+
 	os.Exit(code)
 }
 func provider(t testing.TB, s *fake.Server, extra ...lockbox.Option[string]) *lockbox.Storage[string] {
 	t.Helper()
-	opts, close := s.Connect()
-	t.Cleanup(close)
+
+	opts, stop := s.Connect()
+	t.Cleanup(stop)
 	p, e := lockbox.New[string](t.Context(), "folder", tokens{}, append(extra, lockbox.WithEndpoints[string](lockbox.Endpoints{Secret: "passthrough:///secret", Payload: "passthrough:///payload", Operation: "passthrough:///operation"}), lockbox.WithDialOptions[string](opts...))...)
 	require.NoError(t, e)
+
 	return p
 }
 func TestContract(t *testing.T) {
@@ -45,11 +48,14 @@ func TestCreation(t *testing.T) {
 	t.Parallel()
 	kryptostest.RunCreationContract(t, func(tb testing.TB) (kryptos.Provider[string], kryptos.Provider[string], func(string) int) {
 		tb.Helper()
+
 		s := fake.New()
 		require.Zero(tb, s.Versions("missing"))
+
 		return provider(tb, s), provider(tb, s), func(key string) int {
 			encoded, e := base64key.New().Encode(key)
 			require.NoError(tb, e)
+
 			return s.Versions(encoded)
 		}
 	}, kryptostest.Caps{}, "value")
@@ -62,17 +68,22 @@ func TestInvalidConstructor(t *testing.T) {
 
 func TestInactiveSecretAndCounters(t *testing.T) {
 	t.Parallel()
+
 	server := fake.New()
+
 	p := provider(t, server)
 	defer p.Close(t.Context())
+
 	require.NoError(t, p.Put(t.Context(), "key", "value"))
 	values, err := p.List(t.Context())
 	require.NoError(t, err)
 	require.Len(t, values, 1)
 	values[0].Clear()
+
 	lists, payloads := server.Counts()
 	require.Positive(t, lists)
 	require.Equal(t, 1, payloads)
+
 	encoded, err := base64key.New().Encode("key")
 	require.NoError(t, err)
 	server.Deactivate(encoded)

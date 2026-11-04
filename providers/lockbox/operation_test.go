@@ -30,53 +30,70 @@ func TestPendingOperation(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		server := fake.New()
-		dial, close := server.Connect(grpc.UnaryInterceptor(func(ctx context.Context, req any, info *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {
+
+		dial, stop := server.Connect(grpc.UnaryInterceptor(func(ctx context.Context, req any, info *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {
 			reply, e := next(ctx, req)
 			if e == nil && strings.HasSuffix(info.FullMethod, "/Create") {
 				reply.(*operation.Operation).Done = false
 			}
+
 			return reply, e
 		}))
-		defer close()
+		defer stop()
+
 		p, e := lockbox.New[string](t.Context(), "folder", tokens{}, lockbox.WithDialOptions[string](dial...), lockbox.WithEndpoints[string](lockbox.Endpoints{Secret: "passthrough:///secret", Payload: "passthrough:///payload", Operation: "passthrough:///operation"}))
+
 		require.NoError(t, e)
 		defer p.Close(t.Context())
+
 		require.NoError(t, p.Put(t.Context(), "key", "value"))
 	})
 }
 
 func TestPollingOutageDoesNotReplayMutation(t *testing.T) {
 	t.Parallel()
+
 	for _, permanent := range []bool{false, true} {
 		t.Run(map[bool]string{false: "transient", true: "indeterminate"}[permanent], func(t *testing.T) {
 			t.Parallel()
 			synctest.Test(t, func(t *testing.T) {
 				server := fake.New()
-				var polls atomic.Int32
-				var writes atomic.Int32
-				dial, close := server.Connect(grpc.UnaryInterceptor(func(ctx context.Context, req any, info *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {
+
+				var (
+					polls  atomic.Int32
+					writes atomic.Int32
+				)
+
+				dial, stop := server.Connect(grpc.UnaryInterceptor(func(ctx context.Context, req any, info *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {
 					if r, ok := req.(*operation.GetOperationRequest); ok {
 						if r.OperationId != "create" && r.OperationId != "add" {
 							return nil, status.Error(codes.InvalidArgument, "wrong operation")
 						}
+
 						n := polls.Add(1)
 						if permanent || n%2 == 1 {
 							return nil, status.Error(codes.Unavailable, "poll outage")
 						}
 					}
+
 					reply, err := next(ctx, req)
 					if err == nil && (strings.HasSuffix(info.FullMethod, "/Create") || strings.HasSuffix(info.FullMethod, "/AddVersion")) {
 						writes.Add(1)
+
 						reply.(*operation.Operation).Done = false
 					}
+
 					return reply, err
 				}))
-				defer close()
+				defer stop()
+
 				p, err := lockbox.New[string](t.Context(), "folder", tokens{}, lockbox.WithDialOptions[string](dial...), lockbox.WithEndpoints[string](lockbox.Endpoints{Secret: "passthrough:///secret", Payload: "passthrough:///payload", Operation: "passthrough:///operation"}))
 				require.NoError(t, err)
 				m, err := manager.New(p)
+
 				require.NoError(t, err)
 				defer m.Close(t.Context())
+
 				for i := 1; i <= 2; i++ {
 					err = m.Put(t.Context(), "key", "value")
 					if permanent {
@@ -85,11 +102,13 @@ func TestPollingOutageDoesNotReplayMutation(t *testing.T) {
 					} else {
 						require.NoError(t, err)
 					}
+
 					encoded, err := base64key.New().Encode("key")
 					require.NoError(t, err)
 					require.Equal(t, i, server.Versions(encoded))
 					require.EqualValues(t, i, writes.Load())
 				}
+
 				if permanent {
 					require.EqualValues(t, 6, polls.Load())
 				} else {
@@ -104,36 +123,48 @@ func TestDeletePollingOutageInvalidatesCache(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		server := fake.New()
+
 		var deletes atomic.Int32
+
 		dial, closeServer := server.Connect(grpc.UnaryInterceptor(func(ctx context.Context, req any, info *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {
 			if _, ok := req.(*operation.GetOperationRequest); ok {
 				return nil, status.Error(codes.Unavailable, "poll outage")
 			}
+
 			reply, err := next(ctx, req)
 			if err == nil && strings.HasSuffix(info.FullMethod, "/Delete") {
 				deletes.Add(1)
+
 				reply.(*operation.Operation).Done = false
 			}
+
 			return reply, err
 		}))
 		defer closeServer()
+
 		p, err := lockbox.New[string](t.Context(), "folder", tokens{}, lockbox.WithDialOptions[string](dial...), lockbox.WithEndpoints[string](lockbox.Endpoints{Secret: "passthrough:///secret", Payload: "passthrough:///payload", Operation: "passthrough:///operation"}))
 		require.NoError(t, err)
 		m, err := manager.New(p)
+
 		require.NoError(t, err)
 		defer m.Close(t.Context())
+
 		require.NoError(t, m.Put(t.Context(), "key", "old"))
 		sub, err := m.Watch(t.Context(), manager.WithSkipInitial())
 		require.NoError(t, err)
+
 		defer sub.Close()
+
 		require.ErrorIs(t, m.Delete(t.Context(), "key"), kryptos.ErrIndeterminate)
 		require.EqualValues(t, 1, deletes.Load())
+
 		cached, err := m.Cached("key")
 		require.Nil(t, cached)
 		require.ErrorIs(t, err, kryptos.ErrNotFound)
 		got, err := m.Get(t.Context(), "key")
 		require.Nil(t, got)
 		require.ErrorIs(t, err, kryptos.ErrNotFound)
+
 		select {
 		case event := <-sub.Events():
 			event.Clear()

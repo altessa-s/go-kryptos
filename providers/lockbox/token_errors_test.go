@@ -26,11 +26,13 @@ import (
 func TestTokenOptionsAndValidation(t *testing.T) {
 	t.Parallel()
 	pemKey := key(t)
+
 	doer := httpx.DoerFunc(func(*http.Request) (*http.Response, error) { return nil, errors.New("transport failed") })
 	for _, opts := range [][]lockbox.TokenOption{{lockbox.WithIAMEndpoint("http://iam.example.test/tokens")}, {lockbox.WithIAMEndpoint(":bad")}, {lockbox.WithRefreshBefore(-time.Second)}} {
 		_, e := lockbox.NewServiceAccountTokens(doer, "key", "account", pemKey, opts...)
 		require.ErrorIs(t, e, kryptos.ErrInvalidOptions)
 	}
+
 	_, e := lockbox.NewServiceAccountTokens(nil, "key", "account", pemKey)
 	require.ErrorIs(t, e, kryptos.ErrInvalidOptions)
 	_, e = lockbox.NewServiceAccountTokens(doer, "bad/id", "account", pemKey)
@@ -43,6 +45,7 @@ func TestTokenOptionsAndValidation(t *testing.T) {
 	require.ErrorIs(t, e, kryptos.ErrUnavailable)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
+
 	_, e = source.Token(ctx)
 	require.ErrorIs(t, e, context.Canceled)
 	require.NoError(t, source.Close(t.Context()))
@@ -54,8 +57,11 @@ func TestTokenLifecycleCancellation(t *testing.T) {
 		doer := httpx.DoerFunc(func(r *http.Request) (*http.Response, error) { <-r.Context().Done(); return nil, r.Context().Err() })
 		source, e := lockbox.NewServiceAccountTokens(doer, "key", "account", pemKey)
 		require.NoError(t, e)
+
 		done := make(chan error, 1)
+
 		go func() { _, e := source.Token(t.Context()); done <- e }()
+
 		synctest.Wait()
 		require.NoError(t, source.Close(t.Context()))
 		require.Error(t, <-done)
@@ -69,13 +75,16 @@ func FuzzIAMResponse(f *testing.F) {
 		if len(body) > 70000 {
 			return
 		}
+
 		pemKey := key(t)
 		doer := httpx.DoerFunc(func(*http.Request) (*http.Response, error) {
 			return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(body))}, nil
 		})
 		source, e := lockbox.NewServiceAccountTokens(doer, "key", "account", pemKey)
+
 		require.NoError(t, e)
 		defer source.Close(t.Context())
+
 		token, e := source.Token(t.Context())
 		if e == nil {
 			require.NotEmpty(t, token)
@@ -86,8 +95,10 @@ func FuzzIAMResponse(f *testing.F) {
 func TestMalformedTransportResponse(t *testing.T) {
 	t.Parallel()
 	source, e := lockbox.NewServiceAccountTokens(httpx.DoerFunc(func(*http.Request) (*http.Response, error) { return nil, nil }), "key", "account", key(t))
+
 	require.NoError(t, e)
 	defer source.Close(t.Context())
+
 	_, e = source.Token(t.Context())
 	require.ErrorIs(t, e, kryptos.ErrMalformed)
 }

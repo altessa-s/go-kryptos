@@ -24,30 +24,42 @@ import (
 
 func TestLostDeleteResponsePreservesRecreation(t *testing.T) {
 	t.Parallel()
+
 	for _, transportFailure := range []bool{false, true} {
 		t.Run(map[bool]string{false: "server-error", true: "transport-error"}[transportFailure], func(t *testing.T) {
 			t.Parallel()
+
 			b := &backend{data: map[string]*record{}}
-			var deletes atomic.Int32
-			var recreate func(context.Context) error
+
+			var (
+				deletes  atomic.Int32
+				recreate func(context.Context) error
+			)
+
 			cfg := api.DefaultConfig()
 			cfg.MaxRetries = 3
 			cfg.HttpClient.Transport = roundTrip(func(r *http.Request) (*http.Response, error) {
 				w := httptest.NewRecorder()
 				b.serve(w, r)
+
 				if r.Method == http.MethodDelete {
 					deletes.Add(1)
+
 					if err := recreate(r.Context()); err != nil {
 						return nil, err
 					}
+
 					if transportFailure {
 						return nil, errors.New(kryptostest.Canary)
 					}
+
 					w = httptest.NewRecorder()
 					w.WriteHeader(http.StatusInternalServerError)
 				}
+
 				response := w.Result()
 				response.Request = r
+
 				return response, nil
 			})
 			client, err := api.NewClient(cfg)
@@ -55,12 +67,16 @@ func TestLostDeleteResponsePreservesRecreation(t *testing.T) {
 			p, err := vault.New[string](client)
 			require.NoError(t, err)
 			other, err := vault.New[string](client)
+
 			require.NoError(t, err)
 			defer other.Close(t.Context())
+
 			recreate = func(ctx context.Context) error { return other.Put(ctx, "key", "replacement") }
 			m, err := manager.New(p)
+
 			require.NoError(t, err)
 			defer m.Close(t.Context())
+
 			require.NoError(t, m.Put(t.Context(), "key", "original"))
 			err = m.Delete(t.Context(), "key")
 			require.ErrorIs(t, err, kryptos.ErrIndeterminate)
@@ -78,6 +94,7 @@ func TestLostDeleteResponsePreservesRecreation(t *testing.T) {
 // transport so this test catches mutations built from an unauthenticated clone.
 func TestDeletePreservesClientAuthentication(t *testing.T) {
 	t.Parallel()
+
 	b := &backend{data: map[string]*record{}}
 	cfg := api.DefaultConfig()
 	cfg.MaxRetries = 3
@@ -89,8 +106,10 @@ func TestDeletePreservesClientAuthentication(t *testing.T) {
 		} else {
 			b.serve(w, r)
 		}
+
 		response := w.Result()
 		response.Request = r
+
 		return response, nil
 	})
 	client, err := api.NewClient(cfg)
@@ -98,8 +117,10 @@ func TestDeletePreservesClientAuthentication(t *testing.T) {
 	client.SetToken("test-token")
 	client.SetNamespace("test-namespace")
 	p, err := vault.New[string](client)
+
 	require.NoError(t, err)
 	defer p.Close(t.Context())
+
 	require.NoError(t, p.Put(t.Context(), "key", "value"))
 	require.NoError(t, p.Delete(t.Context(), "key"))
 	got, err := p.Get(t.Context(), "key")

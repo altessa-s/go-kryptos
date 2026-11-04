@@ -10,6 +10,10 @@ import "encoding/json"
 type Codec[T any] struct{}
 
 // New returns a JSON codec.
-func New[T any]() *Codec[T]                 { return &Codec[T]{} }
+func New[T any]() *Codec[T] { return &Codec[T]{} }
+
+// Encode marshals v to JSON.
 func (Codec[T]) Encode(v T) ([]byte, error) { return json.Marshal(v) }
+
+// Decode unmarshals JSON into a new T.
 func (Codec[T]) Decode(b []byte) (T, error) { var v T; e := json.Unmarshal(b, &v); return v, e }

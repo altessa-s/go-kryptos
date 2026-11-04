@@ -15,14 +15,21 @@ import (
 
 func TestSerializesSameKey(t *testing.T) {
 	t.Parallel()
-	var locks keystate.Locks
-	var wg sync.WaitGroup
+
+	var (
+		locks keystate.Locks
+		wg    sync.WaitGroup
+	)
+
 	value := 0
+
 	for range 100 {
 		wg.Go(func() { release := locks.Lock("same"); value++; release() })
 	}
+
 	wg.Wait()
 	require.Equal(t, 100, value)
+
 	a := locks.Lock("a")
 	b := locks.Lock("b")
 	b()

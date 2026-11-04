@@ -22,17 +22,21 @@ func (l *Locks) Lock(key string) func() {
 	if l.keys == nil {
 		l.keys = make(map[string]*entry)
 	}
+
 	e := l.keys[key]
 	if e == nil {
 		e = &entry{}
 		l.keys[key] = e
 	}
+
 	e.refs++
 	l.mu.Unlock()
 	e.mu.Lock()
+
 	return func() {
 		e.mu.Unlock()
 		l.mu.Lock()
+
 		e.refs--
 		if e.refs == 0 {
 			delete(l.keys, key)

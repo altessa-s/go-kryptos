@@ -20,6 +20,7 @@ type clonedMap map[string]string
 func (m clonedMap) Clone() clonedMap {
 	out := make(clonedMap, len(m))
 	maps.Copy(out, m)
+
 	return out
 }
 
@@ -28,21 +29,25 @@ func TestCloneSecret_Pin(t *testing.T) {
 
 	t.Run("arrays are copied element by element", func(t *testing.T) {
 		t.Parallel()
+
 		orig := [2][]byte{[]byte("a"), []byte("b")}
 		c := clone.Copy(orig)
 		require.Equal(t, orig, c)
 		c[0][0] = 'X'
+
 		require.Equal(t, "a", string(orig[0]))
 	})
 
 	t.Run("a cloner reference reached twice is cloned once", func(t *testing.T) {
 		t.Parallel()
+
 		shared := clonedMap{"k": "v"}
 		orig := struct{ A, B clonedMap }{shared, shared}
 		c := clone.Copy(orig)
 		require.Equal(t, reflect.ValueOf(c.A).Pointer(), reflect.ValueOf(c.B).Pointer())
 		require.NotEqual(t, reflect.ValueOf(shared).Pointer(), reflect.ValueOf(c.A).Pointer())
 		c.A["k"] = "changed"
+
 		require.Equal(t, "v", shared["k"])
 	})
 }
@@ -72,14 +77,15 @@ func TestShallowValuePath_Pin(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			err := clone.Check(tc.payload)
 			if tc.bad == "" {
 				require.NoError(t, err)
 				return
 			}
+
 			require.ErrorIs(t, err, clone.ErrUncloneable)
 			require.Error(t, err)
 		})
 	}
-
 }

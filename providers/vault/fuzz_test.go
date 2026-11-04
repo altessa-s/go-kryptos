@@ -23,6 +23,7 @@ func FuzzKVExtraction(f *testing.F) {
 		if len(body) > 65536 {
 			return
 		}
+
 		srv := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(body))
@@ -34,8 +35,10 @@ func FuzzKVExtraction(f *testing.F) {
 		c, e := api.NewClient(cfg)
 		require.NoError(t, e)
 		p, e := vault.New[string](c)
+
 		require.NoError(t, e)
 		defer p.Close(t.Context())
+
 		s, e := p.Get(t.Context(), "key")
 		if e == nil {
 			require.NotNil(t, s)

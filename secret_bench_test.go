@@ -13,6 +13,7 @@ import (
 func BenchmarkCloneAndClear(b *testing.B) {
 	s := kryptos.NewSecret("key", make([]byte, 1024), nil, "1")
 	defer s.Clear()
+
 	for b.Loop() {
 		v := s.Clone()
 		v.Clear()

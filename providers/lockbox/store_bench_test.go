@@ -9,14 +9,17 @@ import "testing"
 func BenchmarkDecode(b *testing.B) {
 	p := typedProvider[[]byte](b)
 	defer p.Close(b.Context())
+
 	if e := p.Put(b.Context(), "key", make([]byte, 1024)); e != nil {
 		b.Fatal(e)
 	}
+
 	for b.Loop() {
 		s, e := p.Get(b.Context(), "key")
 		if e != nil {
 			b.Fatal(e)
 		}
+
 		s.Clear()
 	}
 }

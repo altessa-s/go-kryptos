@@ -26,11 +26,13 @@ func (p panicClone) Clone() panicClone {
 	if p.remaining.Add(-1) == 0 {
 		panic(kryptostest.Canary)
 	}
+
 	return p
 }
 
 func TestCachedClonePanicReleasesLock(t *testing.T) {
 	t.Parallel()
+
 	for _, cached := range []bool{false, true} {
 		t.Run(map[bool]string{false: "Get", true: "Cached"}[cached], func(t *testing.T) {
 			t.Parallel()
@@ -44,12 +46,14 @@ func TestCachedClonePanicReleasesLock(t *testing.T) {
 				require.NoError(t, err)
 				first.Clear()
 				count.Store(1)
+
 				var got *kryptos.Secret[panicClone]
 				if cached {
 					got, err = m.Cached("key")
 				} else {
 					got, err = m.Get(t.Context(), "key")
 				}
+
 				require.Nil(t, got)
 				require.ErrorIs(t, err, kryptos.ErrPanicked)
 				require.NotContains(t, err.Error(), kryptostest.Canary)
@@ -74,11 +78,13 @@ type installPanicProvider struct {
 func (p installPanicProvider) Get(ctx context.Context, key string) (*kryptos.Secret[panicClone], error) {
 	s, err := p.Provider.Get(ctx, key)
 	p.count.Store(p.clones)
+
 	return s, err
 }
 
 func TestPutClonePanicReleasesLock(t *testing.T) {
 	t.Parallel()
+
 	for _, clones := range []int32{1, 2} {
 		t.Run(map[int32]string{1: "installation", 2: "notification"}[clones], func(t *testing.T) {
 			t.Parallel()
@@ -114,12 +120,15 @@ func (p fallbackPanicProvider) Get(context.Context, string) (*kryptos.Secret[pan
 }
 func TestCommittedWriteFallbackClonePanic(t *testing.T) {
 	t.Parallel()
+
 	count := &atomic.Int32{}
 	base, err := memory.New(map[string]panicClone{})
 	require.NoError(t, err)
 	m, err := manager.New[panicClone](fallbackPanicProvider{Provider: base, count: count})
+
 	require.NoError(t, err)
 	defer m.Close(t.Context())
+
 	err = m.Put(t.Context(), "key", panicClone{remaining: count})
 	require.ErrorIs(t, err, kryptos.ErrPanicked)
 	require.ErrorIs(t, err, kryptos.ErrPermissionDenied)

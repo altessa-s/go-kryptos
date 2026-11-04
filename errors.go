@@ -32,5 +32,8 @@ var (
 // CommittedError reports failure after a write has committed. Do not retry the write.
 type CommittedError struct{ Err error }
 
+// Error reports the committed write without the cause.
 func (e *CommittedError) Error() string { return "secret committed: post-write operation failed" }
+
+// Unwrap returns the post-write failure.
 func (e *CommittedError) Unwrap() error { return e.Err }

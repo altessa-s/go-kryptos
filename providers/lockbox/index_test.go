@@ -21,22 +21,30 @@ import (
 
 func TestRenameBetweenListAndGet(t *testing.T) {
 	t.Parallel()
+
 	for _, action := range []string{"get", "put", "delete"} {
 		t.Run(action, func(t *testing.T) {
 			t.Parallel()
+
 			server := fake.New()
+
 			dial, stop := server.Connect(grpc.UnaryInterceptor(func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {
 				result, err := next(ctx, req)
 				if _, ok := req.(*pb.GetSecretRequest); ok && err == nil {
 					result.(*pb.Secret).Name = "renamed"
 				}
+
 				return result, err
 			}))
 			defer stop()
+
 			p, err := lockbox.New[string](t.Context(), "folder", tokens{}, lockbox.WithDialOptions[string](dial...), lockbox.WithEndpoints[string](lockbox.Endpoints{Secret: "passthrough:///secret", Payload: "passthrough:///payload", Operation: "passthrough:///operation"}))
+
 			require.NoError(t, err)
 			defer p.Close(t.Context())
+
 			require.NoError(t, p.Put(t.Context(), "key", "original"))
+
 			for range 2 {
 				switch action {
 				case "get":
@@ -46,8 +54,10 @@ func TestRenameBetweenListAndGet(t *testing.T) {
 				case "delete":
 					err = p.Delete(t.Context(), "key")
 				}
+
 				require.ErrorIs(t, err, kryptos.ErrConflict)
 			}
+
 			lists, reads := server.Counts()
 			require.Equal(t, 3, lists, "each rejected lookup invalidates the cached mapping")
 			require.Zero(t, reads)

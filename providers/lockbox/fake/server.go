@@ -52,6 +52,7 @@ type operations struct {
 	operation.UnimplementedOperationServiceServer
 }
 
+// New returns an empty server.
 func New() *Server { return &Server{secrets: map[string]*entry{}} }
 
 type localToken struct{}
@@ -73,6 +74,7 @@ func (s *Server) serve(listener net.Listener,
 	if err != nil {
 		panic(err)
 	}
+
 	template := &x509.Certificate{SerialNumber: big.NewInt(1),
 		DNSNames: []string{"fake"},
 		NotBefore: time.Date(2000,
@@ -93,24 +95,30 @@ func (s *Server) serve(listener net.Listener,
 			time.UTC),
 		KeyUsage:    x509.KeyUsageDigitalSignature,
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}
+
 	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
 	if err != nil {
 		panic(err)
 	}
+
 	cert, err := x509.ParseCertificate(der)
 	if err != nil {
 		panic(err)
 	}
+
 	roots := x509.NewCertPool()
 	roots.AddCert(cert)
+
 	opts = append(opts, grpc.Creds(credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12,
 		Certificates: []tls.Certificate{{Certificate: [][]byte{der},
 			PrivateKey: key}}})))
 	server := grpc.NewServer(opts...)
 	pb.RegisterSecretServiceServer(server, &secrets{b: s})
 	pb.RegisterPayloadServiceServer(server, &payloads{b: s})
+
 	operation.RegisterOperationServiceServer(server, &operations{})
 	go func() { _ = server.Serve(listener) }()
+
 	return []grpc.DialOption{grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12,
 			RootCAs:    roots,
 			ServerName: "fake"})),
@@ -121,38 +129,47 @@ func (s *Server) serve(listener net.Listener,
 func (s *secrets) List(context.Context, *pb.ListSecretsRequest) (*pb.ListSecretsResponse, error) {
 	s.b.mu.Lock()
 	defer s.b.mu.Unlock()
+
 	s.b.lists++
+
 	r := &pb.ListSecretsResponse{}
 	for _, e := range s.b.secrets {
 		r.Secrets = append(r.Secrets, proto.CloneOf(e.secret))
 	}
+
 	return r, nil
 }
 func (s *secrets) Get(_ context.Context, r *pb.GetSecretRequest) (*pb.Secret, error) {
 	s.b.mu.Lock()
 	defer s.b.mu.Unlock()
+
 	for _, e := range s.b.secrets {
 		if e.secret.Id == r.SecretId {
 			return proto.CloneOf(e.secret), nil
 		}
 	}
+
 	return nil, status.Error(codes.NotFound, "missing")
 }
 func (s *secrets) Create(_ context.Context, r *pb.CreateSecretRequest) (*operation.Operation, error) {
 	s.b.mu.Lock()
 	defer s.b.mu.Unlock()
+
 	if s.b.secrets[r.Name] != nil {
 		return nil, status.Error(codes.AlreadyExists, "name exists")
 	}
+
 	s.b.sequence++
 	e := &entry{secret: &pb.Secret{Id: strconv.Itoa(s.b.sequence), Name: r.Name, Status: pb.Secret_ACTIVE, Labels: r.Labels}}
 	add(e, r.VersionPayloadEntries)
 	s.b.secrets[r.Name] = e
+
 	return &operation.Operation{Id: "create", Done: true}, nil
 }
 func add(e *entry, changes []*pb.PayloadEntryChange) {
 	id := strconv.Itoa(len(e.payloads) + 1)
 	p := &pb.Payload{VersionId: id}
+
 	for _, c := range changes {
 		entry := &pb.Payload_Entry{Key: c.Key}
 		switch value := c.GetValue().(type) {
@@ -161,36 +178,43 @@ func add(e *entry, changes []*pb.PayloadEntryChange) {
 		case *pb.PayloadEntryChange_TextValue:
 			entry.Value = &pb.Payload_Entry_TextValue{TextValue: value.TextValue}
 		}
+
 		p.Entries = append(p.Entries, entry)
 	}
+
 	e.payloads = append(e.payloads, p)
 	e.secret.CurrentVersion = &pb.Version{Id: id}
 }
 func (s *secrets) AddVersion(_ context.Context, r *pb.AddVersionRequest) (*operation.Operation, error) {
 	s.b.mu.Lock()
 	defer s.b.mu.Unlock()
+
 	for _, e := range s.b.secrets {
 		if e.secret.Id == r.SecretId {
 			add(e, r.PayloadEntries)
 			return &operation.Operation{Id: "add", Done: true}, nil
 		}
 	}
+
 	return nil, status.Error(codes.NotFound, "missing")
 }
 func (s *secrets) Delete(_ context.Context, r *pb.DeleteSecretRequest) (*operation.Operation, error) {
 	s.b.mu.Lock()
 	defer s.b.mu.Unlock()
+
 	for name, e := range s.b.secrets {
 		if e.secret.Id == r.SecretId {
 			delete(s.b.secrets, name)
 			return &operation.Operation{Id: "delete", Done: true}, nil
 		}
 	}
+
 	return nil, status.Error(codes.NotFound, "missing")
 }
 func (s *payloads) Get(_ context.Context, r *pb.GetPayloadRequest) (*pb.Payload, error) {
 	s.b.mu.Lock()
 	defer s.b.mu.Unlock()
+
 	s.b.payloadReads++
 	for _, e := range s.b.secrets {
 		if e.secret.Id == r.SecretId {
@@ -201,6 +225,7 @@ func (s *payloads) Get(_ context.Context, r *pb.GetPayloadRequest) (*pb.Payload,
 			}
 		}
 	}
+
 	return nil, status.Error(codes.NotFound, "missing")
 }
 func (*operations) Get(context.Context, *operation.GetOperationRequest) (*operation.Operation, error) {
@@ -213,9 +238,11 @@ const bufferSize = 1024 * 1024
 func (s *Server) Versions(name string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	if e := s.secrets[name]; e != nil {
 		return len(e.payloads)
 	}
+
 	return 0
 }
 
@@ -223,6 +250,7 @@ func (s *Server) Versions(name string) int {
 func (s *Server) Counts() (int, int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	return s.lists, s.payloadReads
 }
 
@@ -230,5 +258,6 @@ func (s *Server) Counts() (int, int) {
 func (s *Server) Deactivate(name string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.secrets[name].secret.Status = pb.Secret_INACTIVE
 }
