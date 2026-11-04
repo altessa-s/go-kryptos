@@ -12,6 +12,7 @@ docs                        # Documentation
 # Packages
 kryptos                     # Root package: secret type, provider ports, key rules, errors
 codec                       # Key and value codec ports
+sealbox                     # AES-256-GCM sealing of small secrets at rest
 codec/base64key             # Base64 key codec
 codec/jsonvalue             # JSON value codec
 manager                     # Manager: cache, write-through, update cycle, watch, health

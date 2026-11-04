@@ -29,6 +29,7 @@ var layers = map[string][]string{
 	"codec": {}, "internal/clone": {}, "internal/zero": {}, "internal/keystate": {},
 	"internal/lru":    {"github.com/hashicorp/golang-lru/v2"},
 	"codec/base64key": {}, "codec/jsonvalue": {},
+	"sealbox":                {"github.com/altessa-s/go-atlas-core/collections/maps"},
 	"manager":                {module, module + "/internal/clone", module + "/internal/keystate", module + "/internal/lru", "github.com/altessa-s/go-atlas-core/retry", "github.com/altessa-s/go-atlas-core/runtime/concurrency", "github.com/altessa-s/go-atlas-core/runtime/cycle", "github.com/altessa-s/go-atlas-core/runtime/singleflight"},
 	"providers/memory":       {module},
 	"providers/vault":        {module, module + "/internal/zero", module + "/codec/...", "github.com/hashicorp/vault/api"},

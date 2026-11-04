@@ -32,6 +32,7 @@ work.
 | root (`kryptos`) | Secret ownership, redaction, provider/filter/metrics/clock ports, error classes |
 | `manager` | Cache, singleflight, retries, writes, update cycles, watches, health, string resolver |
 | `codec`, `codec/base64key`, `codec/jsonvalue` | Codec ports and standard adapters |
+| `sealbox` | AES-256-GCM sealing of small secrets at rest with a rotating keyring and associated data |
 | `providers/memory` | Concurrent in-memory provider |
 | `providers/vault` | Separate module; caller-owned Vault client, KV v2 |
 | `providers/gcp` | Separate module; credential JSON and client options |
