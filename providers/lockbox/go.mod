@@ -5,8 +5,8 @@ go 1.27.0
 toolchain go1.27.3
 
 require (
-	github.com/altessa-s/go-atlas-core v0.3.1
-	github.com/altessa-s/go-atlas-net v0.2.1
+	github.com/altessa-s/go-atlas-core v0.3.2
+	github.com/altessa-s/go-atlas-net v0.2.2
 	github.com/altessa-s/go-kryptos v0.1.2
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/stretchr/testify v1.12.1
