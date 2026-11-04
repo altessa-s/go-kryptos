@@ -5,10 +5,10 @@ go 1.27.0
 toolchain go1.27.3
 
 require (
-	github.com/altessa-s/go-atlas-net v0.2.2
+	github.com/altessa-s/go-atlas-net v0.2.3
 	github.com/altessa-s/go-kryptos v0.1.3
 	github.com/altessa-s/go-kryptos/providers/vault v0.0.0
-	github.com/altessa-s/go-nomos v0.2.2
+	github.com/altessa-s/go-nomos v0.2.3
 	github.com/hashicorp/vault/api v1.23.0
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go v0.44.0
@@ -19,7 +19,7 @@ require (
 	dario.cat/mergo v1.0.2 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
-	github.com/altessa-s/go-atlas-core v0.3.2 // indirect
+	github.com/altessa-s/go-atlas-core v0.3.3 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
