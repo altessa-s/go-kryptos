@@ -12,7 +12,7 @@ caller-chosen associated data.
 
 | Symbol                  | Description                                                                                                  |
 |-------------------------|--------------------------------------------------------------------------------------------------------------|
-| `New(current, prev...)` | Builds a `*Box`; an empty current key returns a nil box (no error) whose methods fail with `ErrNoKey`        |
+| `New(current, prev...)` | Builds a `*Box`; an empty current key returns a nil box (no error): `Seal`/`Open` fail with `ErrNoKey`, `Current`/`Opens` report false |
 | `Box.Seal(p, aad)`      | Encrypts with the current key and a fresh random nonce                                                       |
 | `Box.Open(s, aad)`      | Decrypts with the key named by `s.KeyID`; `ErrUnknownKey` for a key not configured, `ErrOpen` otherwise      |
 | `Box.Current(s)`        | Whether `s` was sealed with the current key (re-seal values that are not)                                   |

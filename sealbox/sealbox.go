@@ -44,8 +44,8 @@ type Box struct {
 }
 
 // New returns a box sealing with current and opening with current and previous. Keys are standard base64 encodings of 32-byte values;
-// surrounding whitespace is ignored. An empty (or blank) current key returns a nil box and no error: no key is configured, and the box's
-// methods report [ErrNoKey]. A malformed key fails with an error naming its position (0 = current), never its value.
+// surrounding whitespace is ignored. An empty (or blank) current key returns a nil box and no error: no key is configured; Seal and Open on
+// the nil box report [ErrNoKey], Current and Opens report false. A malformed key fails with an error naming its position (0 = current), never its value.
 func New(current string, previous ...string) (*Box, error) {
 	if strings.TrimSpace(current) == "" {
 		return nil, nil //nolint:nilnil // no key configured is not an error: the nil box reports ErrNoKey
