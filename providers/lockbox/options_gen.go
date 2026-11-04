@@ -4,9 +4,9 @@
 package lockbox
 
 import (
-	"github.com/altessa-s/go-kryptos/codec"
-
 	"google.golang.org/grpc"
+
+	"github.com/altessa-s/go-kryptos/codec"
 )
 
 // Option is a functional option for configuring options.

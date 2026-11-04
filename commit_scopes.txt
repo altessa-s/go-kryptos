@@ -18,12 +18,13 @@ manager                     # Manager: cache, write-through, update cycle, watch
 providers/memory            # In-memory provider
 providers/vault             # HashiCorp Vault KV v2 provider, nested module
 providers/gcp               # Google Cloud Secret Manager provider, nested module
+providers/gcp/fake          # Socket-free Secret Manager backend for tests
 providers/lockbox           # Yandex Cloud Lockbox provider, nested module
+providers/lockbox/fake      # Socket-free Lockbox backend for tests
 kryptostest                 # Provider contract suite and test doubles
 internal/clone              # Deep copy of secret payloads
 internal/zero               # Clearing of secret payloads
 internal/keystate           # Per-key generation and mutation lock
-internal/flight             # Keyed single-flight with a sanitized panic boundary
 internal/lru                # Sharded LRU with an eviction callback
 integration/docker          # Docker-backed integration tests, nested module
 

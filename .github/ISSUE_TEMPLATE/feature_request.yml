@@ -38,12 +38,13 @@ body:
         - providers/memory
         - providers/vault
         - providers/gcp
+        - providers/gcp/fake
         - providers/lockbox
+        - providers/lockbox/fake
         - kryptostest
         - internal/clone
         - internal/zero
         - internal/keystate
-        - internal/flight
         - internal/lru
         - integration/docker
         - devtools
