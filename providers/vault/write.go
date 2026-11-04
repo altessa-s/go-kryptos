@@ -20,7 +20,9 @@ func (s *Storage[T]) write(ctx context.Context, key string, data map[string]any)
 	if err != nil {
 		return kryptos.ErrInvalidOptions
 	}
+
 	client.SetMaxRetries(0)
+
 	request := s.client.NewRequest(http.MethodPut, "/v1/"+path.Join(s.o.mountPath, "data", key))
 	if err = request.SetJSONBody(data); err != nil {
 		return kryptos.ErrValueEncoding
@@ -31,15 +33,19 @@ func (s *Storage[T]) write(ctx context.Context, key string, data map[string]any)
 	if response != nil && response.Body != nil {
 		defer func() { _ = response.Body.Close() }()
 	}
+
 	if response == nil || response.Response == nil {
 		return kryptos.ErrIndeterminate
 	}
+
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		if response.StatusCode >= http.StatusInternalServerError || err == nil {
 			return kryptos.ErrIndeterminate
 		}
+
 		return classify(err)
 	}
+
 	var body struct {
 		Data struct {
 			Version int `json:"version"`
@@ -48,6 +54,7 @@ func (s *Storage[T]) write(ctx context.Context, key string, data map[string]any)
 	if response.Body == nil || json.NewDecoder(response.Body).Decode(&body) != nil || body.Data.Version <= 0 {
 		return &kryptos.CommittedError{Err: kryptos.ErrMalformed}
 	}
+
 	return nil
 }
 
@@ -58,6 +65,7 @@ func (s *Storage[T]) deleteMetadata(ctx context.Context, key string) error {
 	if err != nil {
 		return kryptos.ErrInvalidOptions
 	}
+
 	client.SetMaxRetries(0)
 	// Build from the original client to retain authentication and request settings.
 	request := s.client.NewRequest(http.MethodDelete, "/v1/"+path.Join(s.o.mountPath, "metadata", key))
@@ -66,14 +74,18 @@ func (s *Storage[T]) deleteMetadata(ctx context.Context, key string) error {
 	if response != nil && response.Body != nil {
 		defer func() { _ = response.Body.Close() }()
 	}
+
 	if response == nil || response.Response == nil {
 		return kryptos.ErrIndeterminate
 	}
+
 	if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
 		return nil
 	}
+
 	if response.StatusCode >= http.StatusInternalServerError || err == nil {
 		return kryptos.ErrIndeterminate
 	}
+
 	return classify(err)
 }

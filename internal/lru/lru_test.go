@@ -14,7 +14,9 @@ import (
 
 func TestEviction(t *testing.T) {
 	t.Parallel()
+
 	var evicted []int
+
 	c, e := lru.New(2, 1, func(_ string, v int) { evicted = append(evicted, v) })
 	require.NoError(t, e)
 	c.Put("a", 1)
@@ -31,6 +33,7 @@ func TestEviction(t *testing.T) {
 	c.Remove("c")
 	c.Purge()
 	require.Zero(t, c.Len())
+
 	_, e = lru.New[int](0, 1, nil)
 	require.Error(t, e)
 	c, e = lru.New[int](3, 2, nil)

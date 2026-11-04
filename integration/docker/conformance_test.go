@@ -22,11 +22,14 @@ var _ secrets.Resolver = manager.StringResolver{}
 
 func TestResolverConformance(t *testing.T) {
 	t.Parallel()
+
 	p, e := memory.New(map[string]string{"ns:key": "value"})
 	require.NoError(t, e)
 	m, e := manager.New(p)
+
 	require.NoError(t, e)
 	defer m.Close(t.Context())
+
 	v, e := manager.NewStringResolver(m).Resolve(t.Context(), "ns:key")
 	require.NoError(t, e)
 	require.Equal(t, "value", v)

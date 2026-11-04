@@ -63,15 +63,18 @@ func TestCloneSecret_MutationIsolation(t *testing.T) {
 
 	t.Run("map", func(t *testing.T) {
 		t.Parallel()
+
 		orig := map[string]string{"user": "u"}
 		c := clone.Copy(orig)
 		c["user"] = "changed"
 		c["new"] = "x"
+
 		require.Equal(t, map[string]string{"user": "u"}, orig)
 	})
 
 	t.Run("nested struct", func(t *testing.T) {
 		t.Parallel()
+
 		orig := cloneNested{
 			Name: "n", List: []string{"a"}, Attrs: map[string]string{"k": "v"},
 			Inner: &cloneInner{Tags: []string{"t"}}, Any: []byte("raw"),
@@ -81,6 +84,7 @@ func TestCloneSecret_MutationIsolation(t *testing.T) {
 		c.Attrs["k"] = "changed"
 		c.Inner.Tags[0] = "changed"
 		c.Any.([]byte)[0] = 'X'
+
 		require.Equal(t, "a", orig.List[0])
 		require.Equal(t, "v", orig.Attrs["k"])
 		require.Equal(t, "t", orig.Inner.Tags[0])
@@ -89,6 +93,7 @@ func TestCloneSecret_MutationIsolation(t *testing.T) {
 
 	t.Run("pointer", func(t *testing.T) {
 		t.Parallel()
+
 		orig := &cloneInner{Tags: []string{"t"}}
 		c := clone.Copy(orig)
 		require.NotSame(t, orig, c)
@@ -98,54 +103,69 @@ func TestCloneSecret_MutationIsolation(t *testing.T) {
 
 	t.Run("string slice", func(t *testing.T) {
 		t.Parallel()
+
 		orig := []string{"a", "b"}
 		c := clone.Copy(orig)
 		c[0] = "changed"
+
 		require.Equal(t, []string{"a", "b"}, orig)
 	})
 
 	t.Run("any holding bytes", func(t *testing.T) {
 		t.Parallel()
+
 		var orig any = []byte("raw")
+
 		c := clone.Copy(orig)
 		c.([]byte)[0] = 'X'
+
 		require.Equal(t, "raw", string(orig.([]byte)))
 	})
 
 	t.Run("any holding map", func(t *testing.T) {
 		t.Parallel()
+
 		var orig any = map[string]any{"k": []byte("v")}
+
 		c := clone.Copy(orig)
 		c.(map[string]any)["k"].([]byte)[0] = 'X'
 		c.(map[string]any)["new"] = 1
+
 		require.Equal(t, map[string]any{"k": []byte("v")}, orig)
 	})
 
 	t.Run("pointer keys", func(t *testing.T) {
 		t.Parallel()
+
 		key := &cloneInner{Tags: []string{"t"}}
 		orig := map[*cloneInner]string{key: "v"}
+
 		c := clone.Copy(orig)
 		for k := range c {
 			require.NotSame(t, key, k, "a copied pointer key is a new identity")
 			k.Tags[0] = "changed"
 		}
+
 		require.Equal(t, "t", key.Tags[0])
 	})
 
 	t.Run("struct key with pointer", func(t *testing.T) {
 		t.Parallel()
+
 		inner := &cloneInner{Tags: []string{"t"}}
 		orig := map[cloneKey]string{{ID: 1, Ptr: inner}: "v"}
+
 		c := clone.Copy(orig)
 		for k := range c {
 			k.Ptr.Tags[0] = "changed"
 		}
+
 		require.Equal(t, "t", inner.Tags[0])
 	})
 
 	t.Run("Clone method", func(t *testing.T) {
 		t.Parallel()
+
 		orig := selfCloner{Data: []byte("d")}
 		c := clone.Copy(orig)
 		require.True(t, c.cloned, "a payload's own Clone method is used")
@@ -155,7 +175,9 @@ func TestCloneSecret_MutationIsolation(t *testing.T) {
 
 	t.Run("nil references", func(t *testing.T) {
 		t.Parallel()
+
 		var orig cloneNested
+
 		c := clone.Copy(orig)
 		require.Nil(t, c.List)
 		require.Nil(t, c.Attrs)
@@ -171,6 +193,7 @@ func TestCloneSecret_FastPaths(t *testing.T) {
 
 	t.Run("string", func(t *testing.T) {
 		t.Parallel()
+
 		orig := string([]byte("payload"))
 		c := clone.Copy(orig)
 		require.Equal(t, orig, c)
@@ -180,6 +203,7 @@ func TestCloneSecret_FastPaths(t *testing.T) {
 
 	t.Run("bytes", func(t *testing.T) {
 		t.Parallel()
+
 		tests := []struct {
 			name string
 			orig []byte
@@ -191,13 +215,16 @@ func TestCloneSecret_FastPaths(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
 				t.Parallel()
+
 				c := clone.Copy(tc.orig)
 				want := clone.Copy(tc.orig)
 				require.Equal(t, want == nil, c == nil, "nil-ness matches the reflection path")
 				require.Equal(t, want, c)
 				require.Len(t, c, len(tc.orig))
+
 				if len(c) > 0 {
 					c[0] = 'X'
+
 					require.Equal(t, byte('p'), tc.orig[0], "mutating the copy leaves the original intact")
 				}
 			})
@@ -206,9 +233,12 @@ func TestCloneSecret_FastPaths(t *testing.T) {
 
 	t.Run("other types take the reflection path", func(t *testing.T) {
 		t.Parallel()
+
 		var anyBytes any = []byte("raw")
+
 		c := clone.Copy(anyBytes)
 		c.([]byte)[0] = 'X'
+
 		require.Equal(t, "raw", string(anyBytes.([]byte)))
 
 		clonerBytes := clone.Copy(bytesCloner("raw"))
@@ -229,6 +259,7 @@ func TestCloneSecret_CyclesAndAliases(t *testing.T) {
 
 	t.Run("cyclic pointer", func(t *testing.T) {
 		t.Parallel()
+
 		orig := &cloneNode{Name: "a"}
 		orig.Next = orig
 		c := clone.Copy(orig)
@@ -238,30 +269,37 @@ func TestCloneSecret_CyclesAndAliases(t *testing.T) {
 
 	t.Run("self-referential map", func(t *testing.T) {
 		t.Parallel()
+
 		orig := map[string]any{"name": "m"}
 		orig["self"] = orig
 		c := clone.Copy(orig)
 		self := c["self"].(map[string]any)
 		self["name"] = "changed"
+
 		require.Equal(t, "changed", c["name"], "the cycle is preserved in the copy")
 		require.Equal(t, "m", orig["name"])
 	})
 
 	t.Run("self-referential slice in any", func(t *testing.T) {
 		t.Parallel()
+
 		s := make([]any, 2)
 		s[0] = s
 		s[1] = "x"
+
 		var orig any = s
+
 		c := clone.Copy(orig).([]any)
 		inner := c[0].([]any)
 		inner[1] = "changed"
+
 		require.Equal(t, "changed", c[1], "the cycle is preserved in the copy")
 		require.Equal(t, "x", s[1])
 	})
 
 	t.Run("identical references stay shared", func(t *testing.T) {
 		t.Parallel()
+
 		inner := &cloneInner{Tags: []string{"t"}}
 		c := clone.Copy(cloneShared{A: inner, B: inner})
 		require.Same(t, c.A, c.B)
@@ -270,6 +308,7 @@ func TestCloneSecret_CyclesAndAliases(t *testing.T) {
 
 	t.Run("overlapping views become independent", func(t *testing.T) {
 		t.Parallel()
+
 		b := []int{1, 2}
 		c := clone.Copy(cloneViews{A: b, B: b[1:]})
 		c.A[1] = 9
@@ -279,6 +318,7 @@ func TestCloneSecret_CyclesAndAliases(t *testing.T) {
 
 	t.Run("interior pointer becomes independent", func(t *testing.T) {
 		t.Parallel()
+
 		orig := &cloneInterior{Field: 1}
 		orig.Ref = &orig.Field
 		c := clone.Copy(orig)
@@ -315,9 +355,12 @@ func TestCloneSecret_DefinedPointerAndNestedCloners(t *testing.T) {
 
 	t.Run("defined pointer in interface", func(t *testing.T) {
 		t.Parallel()
+
 		node := &cloneNode{Name: "a"}
 		node.Next = node
+
 		var orig any = namedNodePtr(node)
+
 		c := clone.Copy(orig)
 		p, ok := c.(namedNodePtr)
 		require.True(t, ok, "the dynamic type must be kept")
@@ -327,20 +370,26 @@ func TestCloneSecret_DefinedPointerAndNestedCloners(t *testing.T) {
 
 	t.Run("interface map keys", func(t *testing.T) {
 		t.Parallel()
+
 		node := &cloneNode{Name: "k"}
 		orig := map[any]string{namedNodePtr(node): "v"}
+
 		c := clone.Copy(orig)
 		for k := range c {
 			p, ok := k.(namedNodePtr)
 			require.True(t, ok)
+
 			p.Name = "changed"
 		}
+
 		require.Equal(t, "k", node.Name)
 	})
 
 	t.Run("cloner behind any", func(t *testing.T) {
 		t.Parallel()
+
 		var orig any = privateCloner{secret: []byte("s")}
+
 		c := clone.Copy(orig)
 		c.(privateCloner).set('X')
 		require.Equal(t, "s", string(orig.(privateCloner).secret))
@@ -348,6 +397,7 @@ func TestCloneSecret_DefinedPointerAndNestedCloners(t *testing.T) {
 
 	t.Run("nested cloners", func(t *testing.T) {
 		t.Parallel()
+
 		orig := clonerHolder{
 			C: privateCloner{secret: []byte("s")},
 			M: map[string]privateCloner{"k": {secret: []byte("m")}},
@@ -365,11 +415,13 @@ type cloneablePayload struct {
 	Tags    []string
 	Created time.Time
 	Addr    netip.Addr
-	ttl     time.Duration
-	mu      sync.Mutex
+	ttl     time.Duration //nolint:unused // Inspected through reflection by CheckType.
+	mu      sync.Mutex    //nolint:unused // Inspected through reflection by CheckType.
 }
 
-type secretBytes struct{ raw []byte }
+type secretBytes struct {
+	raw []byte //nolint:unused // Inspected through reflection by CheckType.
+}
 
 type withClone struct{ raw []byte }
 
@@ -382,6 +434,7 @@ type node struct {
 
 func TestCheckCloneable(t *testing.T) {
 	t.Parallel()
+
 	for _, tc := range []struct {
 		name string
 		typ  reflect.Type
@@ -400,11 +453,13 @@ func TestCheckCloneable(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			err := clone.CheckType(tc.typ)
 			if tc.bad == "" {
 				require.NoError(t, err)
 				return
 			}
+
 			require.ErrorIs(t, err, clone.ErrUncloneable)
 			require.ErrorContains(t, err, tc.bad)
 		})

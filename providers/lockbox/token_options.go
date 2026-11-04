@@ -18,6 +18,8 @@ type tokenOptions struct {
 }
 
 const (
-	DefaultIAMEndpoint   = "https://iam.api.cloud.yandex.net/iam/v1/tokens"
+	// DefaultIAMEndpoint is the Yandex Cloud IAM token endpoint.
+	DefaultIAMEndpoint = "https://iam.api.cloud.yandex.net/iam/v1/tokens"
+	// DefaultRefreshBefore is how long before expiry a token is refreshed.
 	DefaultRefreshBefore = time.Minute
 )

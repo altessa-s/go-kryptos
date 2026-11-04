@@ -29,10 +29,12 @@ func FuzzDecode(f *testing.F) {
 	f.Add("!")
 	f.Fuzz(func(t *testing.T, s string) {
 		c := base64key.New()
+
 		v, e := c.Decode(s)
 		if e != nil {
 			return
 		}
+
 		encoded, e := c.Encode(v)
 		require.NoError(t, e)
 		again, e := c.Decode(encoded)

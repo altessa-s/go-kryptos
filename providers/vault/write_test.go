@@ -24,6 +24,7 @@ import (
 
 func TestWriteResponseOutcome(t *testing.T) {
 	t.Parallel()
+
 	for _, tc := range []struct {
 		name, body string
 		code       int
@@ -37,24 +38,33 @@ func TestWriteResponseOutcome(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			b := &backend{data: map[string]*record{}}
+
 			var fail atomic.Bool
+
 			srv := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if fail.Load() && r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/data/") {
 					b.serve(httptest.NewRecorder(), r)
+
 					if tc.code == 0 {
 						conn, _, err := w.(http.Hijacker).Hijack()
 						if err != nil {
 							t.Error(err)
 							return
 						}
+
 						_ = conn.Close()
+
 						return
 					}
+
 					w.WriteHeader(tc.code)
 					_, _ = w.Write([]byte(tc.body))
+
 					return
 				}
+
 				b.serve(w, r)
 			}))
 			cfg := api.DefaultConfig()
@@ -67,12 +77,16 @@ func TestWriteResponseOutcome(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, p.Put(t.Context(), "key", "old"))
 			fail.Store(true)
+
 			m, err := manager.New(p)
+
 			require.NoError(t, err)
 			defer m.Close(context.WithoutCancel(t.Context()))
+
 			old, err := m.Get(t.Context(), "key")
 			require.NoError(t, err)
 			old.Clear()
+
 			err = m.Put(t.Context(), "key", "new")
 			if tc.committed {
 				_, ok := errors.AsType[*kryptos.CommittedError](err)
@@ -85,6 +99,7 @@ func TestWriteResponseOutcome(t *testing.T) {
 			} else {
 				require.ErrorIs(t, err, kryptos.ErrIndeterminate)
 			}
+
 			b.mu.Lock()
 			writes := b.writes
 			b.mu.Unlock()

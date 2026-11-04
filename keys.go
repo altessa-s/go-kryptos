@@ -15,11 +15,13 @@ func ValidateKey(key string) error {
 	if len(key) < MinKeyLength || len(key) > MaxKeyLength || key == ".." {
 		return ErrInvalidKey
 	}
+
 	for _, c := range []byte(key) {
 		allowed := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '.' || c == ':' || c == '-'
 		if !allowed {
 			return ErrInvalidKey
 		}
 	}
+
 	return nil
 }

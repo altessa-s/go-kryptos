@@ -21,6 +21,7 @@ func typedProvider[T any](tb testing.TB) kryptos.Provider[T] {
 	client := newClient(tb, &backend{data: map[string]*record{}})
 	p, e := vault.New[T](client)
 	require.NoError(tb, e)
+
 	return p
 }
 func TestPayloadTypes(t *testing.T) {
@@ -31,6 +32,7 @@ func TestPayloadTypes(t *testing.T) {
 	})
 	t.Run("struct", func(t *testing.T) {
 		t.Parallel()
+
 		type payload struct {
 			Password string
 			Data     []byte
@@ -45,6 +47,7 @@ func TestManagerContract(t *testing.T) {
 		tb.Helper()
 		m, e := manager.New(typedProvider[string](tb))
 		require.NoError(tb, e)
+
 		return m
 	}, "value")
 }

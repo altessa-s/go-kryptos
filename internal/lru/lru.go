@@ -16,43 +16,63 @@ type Cache[V any] struct {
 	shards []*lru.Cache[string, V]
 }
 
+// New returns a cache of size entries split across shards; evict, when
+// non-nil, receives every evicted entry.
 func New[V any](size, shards int, evict func(string, V)) (*Cache[V], error) {
 	c := &Cache[V]{seed: maphash.MakeSeed()}
+
 	for i := range shards {
 		n := size / shards
 		if i < size%shards {
 			n++
 		}
+
 		s, e := lru.NewWithEvict[string, V](n, evict)
 		if e != nil {
 			return nil, e
 		}
+
 		c.shards = append(c.shards, s)
 	}
+
 	return c, nil
 }
 func (c *Cache[V]) shard(k string) *lru.Cache[string, V] {
 	return c.shards[maphash.String(c.seed, k)%uint64(len(c.shards))]
 }
+
+// Get returns the value of k and marks it recently used.
 func (c *Cache[V]) Get(k string) (V, bool) { return c.shard(k).Get(k) }
-func (c *Cache[V]) Put(k string, v V)      { s := c.shard(k); s.Remove(k); s.Add(k, v) }
-func (c *Cache[V]) Remove(k string)        { c.shard(k).Remove(k) }
+
+// Put stores v under k, replacing any previous value.
+func (c *Cache[V]) Put(k string, v V) { s := c.shard(k); s.Remove(k); s.Add(k, v) }
+
+// Remove deletes k.
+func (c *Cache[V]) Remove(k string) { c.shard(k).Remove(k) }
+
+// Purge deletes every entry.
 func (c *Cache[V]) Purge() {
 	for _, s := range c.shards {
 		s.Purge()
 	}
 }
+
+// Len returns the number of entries across all shards.
 func (c *Cache[V]) Len() int {
 	n := 0
 	for _, s := range c.shards {
 		n += s.Len()
 	}
+
 	return n
 }
+
+// Keys returns the keys of every shard.
 func (c *Cache[V]) Keys() []string {
 	var keys []string
 	for _, s := range c.shards {
 		keys = append(keys, s.Keys()...)
 	}
+
 	return keys
 }

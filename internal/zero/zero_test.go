@@ -17,17 +17,20 @@ type custom struct{ data []byte }
 func (c *custom) Zeroize() { clear(c.data) }
 func TestClear(t *testing.T) {
 	t.Parallel()
+
 	b := []byte("secret")
 	alias := b
 	zero.Clear(&b)
 	require.Nil(t, b)
 	require.Equal(t, make([]byte, 6), alias)
+
 	c := &custom{data: []byte("value")}
 	bytes := c.data
 	zero.Clear(&c)
 	require.Nil(t, c)
 	zero.Clear(&c)
 	require.Equal(t, make([]byte, 5), bytes)
+
 	s := "immutable"
 	zero.Clear(&s)
 	require.Empty(t, s)
@@ -35,19 +38,24 @@ func TestClear(t *testing.T) {
 
 func TestValueReceiverAndNamedBytes(t *testing.T) {
 	t.Parallel()
+
 	value := custom{data: []byte("secret")}
 	alias := value.data
 	zero.Clear(&value)
 	require.Equal(t, make([]byte, 6), alias)
+
 	type Key []byte
+
 	named := Key("secret")
 	alias = named
 	zero.Clear(&named)
 	require.Nil(t, named)
 	require.Equal(t, make([]byte, 6), alias)
+
 	type octet uint8
+
 	octets := []octet{1, 2, 3}
-	copy := octets
+	view := octets
 	zero.Clear(&octets)
-	require.Equal(t, []octet{0, 0, 0}, copy)
+	require.Equal(t, []octet{0, 0, 0}, view)
 }

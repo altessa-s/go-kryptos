@@ -73,12 +73,14 @@ type Clock interface{ Now() time.Time }
 // RealClock uses the system clock.
 type RealClock struct{}
 
+// Now returns the current time.
 func (RealClock) Now() time.Time { return time.Now() }
 
 // Wait waits until the delay elapses or the caller cancels.
 func (RealClock) Wait(ctx context.Context, delay time.Duration) error {
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
+
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -91,8 +93,11 @@ func (RealClock) Wait(ctx context.Context, delay time.Duration) error {
 type HealthStatus int
 
 const (
+	// Serving means the manager is fully available.
 	Serving HealthStatus = iota
+	// Degraded means the manager is serving with reduced capability.
 	Degraded
+	// NotServing means the manager is unavailable.
 	NotServing
 )
 
@@ -100,8 +105,11 @@ const (
 type EventType int
 
 const (
+	// Created reports a new secret.
 	Created EventType = iota
+	// Updated reports a changed secret.
 	Updated
+	// Deleted reports a removed secret.
 	Deleted
 )
 

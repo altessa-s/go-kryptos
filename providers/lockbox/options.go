@@ -6,9 +6,9 @@ package lockbox
 
 //go:generate optgen generate
 import (
-	"github.com/altessa-s/go-kryptos/codec"
-
 	"google.golang.org/grpc"
+
+	"github.com/altessa-s/go-kryptos/codec"
 )
 
 // Endpoints identifies the three Lockbox services.

@@ -17,15 +17,20 @@ import (
 
 func TestIntegrationTLS(t *testing.T) {
 	t.Parallel()
+
 	server := fake.New()
-	dial, close, e := server.ConnectTCP(t.Context())
+
+	dial, stop, e := server.ConnectTCP(t.Context())
 	if e != nil {
 		t.Skipf("TCP listener unavailable: %v", e)
 	}
-	defer close()
+	defer stop()
+
 	p, e := lockbox.New[string](t.Context(), "folder", tokens{}, lockbox.WithDialOptions[string](dial...), lockbox.WithEndpoints[string](lockbox.Endpoints{Secret: "passthrough:///secret", Payload: "passthrough:///payload", Operation: "passthrough:///operation"}))
+
 	require.NoError(t, e)
 	defer p.Close(t.Context())
+
 	require.NoError(t, p.Put(t.Context(), "key", "value"))
 	v, e := p.Get(t.Context(), "key")
 	require.NoError(t, e)

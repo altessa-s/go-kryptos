@@ -26,7 +26,9 @@ func hasCloneMethod(t reflect.Type) bool {
 	if t.Kind() == reflect.Interface {
 		return false
 	}
+
 	m, ok := t.MethodByName("Clone")
+
 	return ok && m.Type.NumIn() == 1 && m.Type.NumOut() == 1 && m.Type.Out(0) == t
 }
 
@@ -37,9 +39,11 @@ func reachesReference(t reflect.Type, seen map[reflect.Type]bool) bool {
 	if seen[t] {
 		return false
 	}
+
 	if immutable(t) {
 		return false
 	}
+
 	seen[t] = true
 	switch t.Kind() {
 	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Interface, reflect.Chan, reflect.Func, reflect.UnsafePointer:
@@ -55,6 +59,7 @@ func reachesReference(t reflect.Type, seen map[reflect.Type]bool) bool {
 	default:
 		// Scalars and strings hold no reference.
 	}
+
 	return false
 }
 
@@ -66,6 +71,7 @@ func checkCloneableValue(v reflect.Value) error {
 	if path, ok := shallowValuePath(v, v.Type().String(), map[copyKey]bool{}); ok {
 		return fmt.Errorf("%w: %s", ErrUncloneable, path)
 	}
+
 	return nil
 }
 
@@ -77,20 +83,24 @@ func shallowValuePath(v reflect.Value, path string, seen map[copyKey]bool) (stri
 	if !v.IsValid() {
 		return "", false
 	}
+
 	t := v.Type()
 	if v.Kind() != reflect.Interface && (hasCloneMethod(t) || immutable(t)) {
 		return "", false
 	}
+
 	switch v.Kind() {
 	case reflect.Interface:
 		if v.IsNil() {
 			return "", false
 		}
+
 		return shallowValuePath(v.Elem(), path+"("+v.Elem().Type().String()+")", seen)
 	case reflect.Chan, reflect.Func, reflect.UnsafePointer:
 		if v.IsNil() {
 			return "", false
 		}
+
 		return path + " (" + v.Kind().String() + ")", true
 	case reflect.Pointer, reflect.Map, reflect.Slice:
 		return shallowRefPath(v, path, seen)
@@ -110,11 +120,14 @@ func shallowRefPath(v reflect.Value, path string, seen map[copyKey]bool) (string
 	if v.IsNil() {
 		return "", false
 	}
+
 	k, _ := refKey(v)
 	if seen[k] {
 		return "", false
 	}
+
 	seen[k] = true
+
 	switch v.Kind() {
 	case reflect.Pointer:
 		return shallowValuePath(v.Elem(), path+"[elem]", seen)
@@ -131,10 +144,12 @@ func shallowMapPath(v reflect.Value, path string, seen map[copyKey]bool) (string
 		if p, ok := shallowValuePath(it.Key(), path+"[key]", seen); ok {
 			return p, true
 		}
+
 		if p, ok := shallowValuePath(it.Value(), path+"[value]", seen); ok {
 			return p, true
 		}
 	}
+
 	return "", false
 }
 
@@ -147,12 +162,15 @@ func shallowStructPath(v reflect.Value, path string, seen map[copyKey]bool) (str
 			if p, ok := shallowValuePath(fv, fp, seen); ok {
 				return p, true
 			}
+
 			continue
 		}
+
 		if reachesReference(f.Type, map[reflect.Type]bool{}) {
 			return fp + " (unexported " + f.Type.String() + ")", true
 		}
 	}
+
 	return "", false
 }
 
@@ -161,11 +179,13 @@ func shallowElems(v reflect.Value, path string, seen map[copyKey]bool) (string, 
 	if v.Type().Elem().Kind() == reflect.Uint8 {
 		return "", false
 	}
+
 	for i := range v.Len() {
 		if p, ok := shallowValuePath(v.Index(i), path+"[elem]", seen); ok {
 			return p, true
 		}
 	}
+
 	return "", false
 }
 
@@ -176,7 +196,9 @@ func immutable(t reflect.Type) bool {
 	if t.PkgPath() == "net/netip" {
 		return t.Name() == "Addr" || t.Name() == "Prefix" || t.Name() == "AddrPort"
 	}
+
 	_, ok := immutableTypes[t]
+
 	return ok
 }
 
@@ -192,6 +214,7 @@ func CheckType(t reflect.Type) error {
 	if path, ok := shallowPath(t, t.String(), map[reflect.Type]bool{}); ok {
 		return fmt.Errorf("%w: %s", ErrUncloneable, path)
 	}
+
 	return nil
 }
 
@@ -201,9 +224,11 @@ func shallowPath(t reflect.Type, path string, seen map[reflect.Type]bool) (strin
 	if seen[t] || hasCloneMethod(t) {
 		return "", false
 	}
+
 	if immutable(t) {
 		return "", false
 	}
+
 	seen[t] = true
 	switch t.Kind() {
 	case reflect.Chan, reflect.Func, reflect.UnsafePointer:
@@ -214,6 +239,7 @@ func shallowPath(t reflect.Type, path string, seen map[reflect.Type]bool) (strin
 		if p, ok := shallowPath(t.Key(), path+"[key]", seen); ok {
 			return p, true
 		}
+
 		return shallowPath(t.Elem(), path+"[value]", seen)
 	case reflect.Struct:
 		for f := range t.Fields() {
@@ -222,8 +248,10 @@ func shallowPath(t reflect.Type, path string, seen map[reflect.Type]bool) (strin
 				if p, ok := shallowPath(f.Type, fp, seen); ok {
 					return p, true
 				}
+
 				continue
 			}
+
 			if reachesReference(f.Type, map[reflect.Type]bool{}) {
 				return fp + " (unexported " + f.Type.String() + ")", true
 			}
@@ -231,5 +259,6 @@ func shallowPath(t reflect.Type, path string, seen map[reflect.Type]bool) (strin
 	default:
 		// Scalars and strings are copied; interfaces by their dynamic type.
 	}
+
 	return "", false
 }

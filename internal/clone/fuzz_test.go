@@ -17,9 +17,11 @@ func FuzzCopy(f *testing.F) {
 	f.Fuzz(func(t *testing.T, b []byte) {
 		c := clone.Copy(b)
 		require.Equal(t, b, c)
+
 		if len(c) > 0 {
 			before := b[0]
 			c[0] ^= 255
+
 			require.Equal(t, before, b[0])
 		}
 	})

@@ -19,6 +19,7 @@ func FuzzRoundTrip(f *testing.F) {
 		if !utf8.ValidString(value) {
 			t.Skip("JSON replaces invalid UTF-8")
 		}
+
 		c := jsonvalue.New[string]()
 		encoded, e := c.Encode(value)
 		require.NoError(t, e)

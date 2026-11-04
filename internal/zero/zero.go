@@ -19,6 +19,8 @@ func Clear[T any](v *T) {
 	} else if r := reflect.ValueOf(*v); r.IsValid() && r.Kind() == reflect.Slice && r.Type().Elem().Kind() == reflect.Uint8 {
 		r.Clear()
 	}
+
 	var empty T
+
 	*v = empty
 }

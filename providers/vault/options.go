@@ -8,7 +8,9 @@ package vault
 import "github.com/altessa-s/go-kryptos/codec"
 
 const (
-	DefaultMountPath  = "kv"
+	// DefaultMountPath is the default KV v2 mount.
+	DefaultMountPath = "kv"
+	// DefaultSecretPath is the default path prefix below the mount.
 	DefaultSecretPath = "blitz"
 )
 

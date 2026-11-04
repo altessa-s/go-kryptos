@@ -11,9 +11,13 @@ type Codec struct{}
 
 // New returns a key codec.
 func New() *Codec { return &Codec{} }
+
+// Encode returns v as unpadded URL-safe base64.
 func (Codec) Encode(v string) (string, error) {
 	return base64.RawURLEncoding.EncodeToString([]byte(v)), nil
 }
+
+// Decode reverses Encode.
 func (Codec) Decode(v string) (string, error) {
 	b, e := base64.RawURLEncoding.DecodeString(v)
 	return string(b), e

@@ -4,9 +4,9 @@
 package gcp
 
 import (
-	"github.com/altessa-s/go-kryptos/codec"
-
 	"google.golang.org/api/option"
+
+	"github.com/altessa-s/go-kryptos/codec"
 
 	kryptos "github.com/altessa-s/go-kryptos"
 )

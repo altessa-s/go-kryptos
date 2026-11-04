@@ -34,8 +34,10 @@ func Copy[T any](value T) T {
 		if *p != nil {
 			*p = append(make([]byte, 0, len(*p)), *p...)
 		}
+
 		return value
 	}
+
 	return cloneReflect(value)
 }
 
@@ -45,6 +47,7 @@ func Copy[T any](value T) T {
 func cloneReflect[T any](value T) T {
 	var out T
 	reflect.ValueOf(&out).Elem().Set((&deepCopier{}).copy(reflect.ValueOf(&value).Elem()))
+
 	return out
 }
 
@@ -68,6 +71,7 @@ func (d *deepCopier) lookup(k copyKey, t reflect.Type) (reflect.Value, bool) {
 	if !ok {
 		return reflect.Value{}, false
 	}
+
 	return v.Convert(t), true
 }
 
@@ -75,6 +79,7 @@ func (d *deepCopier) remember(k copyKey, v reflect.Value) {
 	if d.seen == nil {
 		d.seen = make(map[copyKey]reflect.Value)
 	}
+
 	d.seen[k] = v
 }
 
@@ -83,6 +88,7 @@ func refKey(v reflect.Value) (copyKey, bool) {
 	if !v.IsValid() {
 		return copyKey{}, false
 	}
+
 	t := v.Type()
 	switch k := v.Kind(); {
 	case k == reflect.Pointer && !v.IsNil():
@@ -102,10 +108,12 @@ func cloneMethod(v reflect.Value) (reflect.Value, bool) {
 	if k := v.Kind(); (k == reflect.Pointer || k == reflect.Map || k == reflect.Slice || k == reflect.Interface) && v.IsNil() {
 		return reflect.Value{}, false
 	}
+
 	mt, ok := v.Type().MethodByName("Clone")
 	if !ok || mt.Type.NumIn() != 1 || mt.Type.NumOut() != 1 || mt.Type.Out(0) != v.Type() {
 		return reflect.Value{}, false
 	}
+
 	return v.Method(mt.Index), true
 }
 
@@ -116,6 +124,7 @@ func (d *deepCopier) copy(v reflect.Value) reflect.Value {
 			return d.copyWithClone(v, clone)
 		}
 	}
+
 	switch v.Kind() {
 	case reflect.String:
 		return reflect.ValueOf(strings.Clone(v.String())).Convert(v.Type())
@@ -147,10 +156,12 @@ func (d *deepCopier) copyWithClone(v, clone reflect.Value) reflect.Value {
 			return c
 		}
 	}
+
 	out := clone.Call(nil)[0]
 	if isRef {
 		d.remember(k, out)
 	}
+
 	return out
 }
 
@@ -160,8 +171,10 @@ func (d *deepCopier) copyInterface(v reflect.Value) reflect.Value {
 	if v.IsNil() {
 		return reflect.Zero(t)
 	}
+
 	out := reflect.New(t).Elem()
 	out.Set(d.copy(v.Elem()))
+
 	return out
 }
 
@@ -171,14 +184,17 @@ func (d *deepCopier) copyPointer(v reflect.Value) reflect.Value {
 	if v.IsNil() {
 		return reflect.Zero(t)
 	}
+
 	k, _ := refKey(v)
 	if c, ok := d.lookup(k, t); ok {
 		return c
 	}
+
 	elem := reflect.New(t.Elem())
 	out := elem.Convert(t) // keeps a defined pointer type
 	d.remember(k, out)
 	elem.Elem().Set(d.copy(v.Elem()))
+
 	return out
 }
 
@@ -188,15 +204,19 @@ func (d *deepCopier) copyMap(v reflect.Value) reflect.Value {
 	if v.IsNil() {
 		return reflect.Zero(t)
 	}
+
 	k, _ := refKey(v)
 	if c, ok := d.lookup(k, t); ok {
 		return c
 	}
+
 	out := reflect.MakeMapWithSize(t, v.Len())
 	d.remember(k, out)
+
 	for it := v.MapRange(); it.Next(); {
 		out.SetMapIndex(d.copy(it.Key()), d.copy(it.Value()))
 	}
+
 	return out
 }
 
@@ -206,17 +226,22 @@ func (d *deepCopier) copySlice(v reflect.Value) reflect.Value {
 	if v.IsNil() {
 		return reflect.Zero(t)
 	}
+
 	k, _ := refKey(v)
 	if c, ok := d.lookup(k, t); ok {
 		return c
 	}
+
 	out := reflect.MakeSlice(t, v.Len(), v.Len())
 	d.remember(k, out)
+
 	if t.Elem().Kind() == reflect.Uint8 {
 		reflect.Copy(out, v)
 		return out
 	}
+
 	d.copyElems(out, v)
+
 	return out
 }
 
@@ -224,6 +249,7 @@ func (d *deepCopier) copySlice(v reflect.Value) reflect.Value {
 func (d *deepCopier) copyArray(v reflect.Value) reflect.Value {
 	out := reflect.New(v.Type()).Elem()
 	d.copyElems(out, v)
+
 	return out
 }
 
@@ -240,10 +266,12 @@ func (d *deepCopier) copyStruct(v reflect.Value) reflect.Value {
 	t := v.Type()
 	out := reflect.New(t).Elem()
 	out.Set(v)
+
 	for i := range t.NumField() {
 		if t.Field(i).IsExported() {
 			out.Field(i).Set(d.copy(v.Field(i)))
 		}
 	}
+
 	return out
 }

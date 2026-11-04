@@ -14,15 +14,19 @@ func (m *Manager[T]) begin(ctx context.Context) (context.Context, func(), error)
 	if e := ctx.Err(); e != nil {
 		return nil, nil, e
 	}
+
 	m.mu.Lock()
 	if m.closed {
 		m.mu.Unlock()
 		return nil, nil, kryptos.ErrClosed
 	}
+
 	m.active.Add(1)
 	m.mu.Unlock()
+
 	work, cancel := context.WithCancel(ctx)
 	stop := context.AfterFunc(m.life, cancel)
+
 	return work, func() { stop(); cancel(); m.active.Done() }, nil
 }
 
@@ -34,9 +38,11 @@ func (m *Manager[T]) Close(ctx context.Context) error {
 		m.closed = true
 		m.cancel()
 		m.group.Close()
+
 		m.mu.Unlock()
 		go m.finishClose(ctx)
 	})
+
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -48,8 +54,10 @@ func (m *Manager[T]) finishClose(ctx context.Context) {
 	m.active.Wait()
 	m.group.Wait()
 	m.clearOwned()
+
 	closeCtx, cancel := context.WithTimeout(ctx, m.o.cycleTimeout)
 	defer cancel()
+
 	m.closeErr = m.p.Close(closeCtx)
 	close(m.done)
 }
@@ -61,11 +69,15 @@ func (m *Manager[T]) Purge(ctx context.Context) error {
 		return e
 	}
 	defer end()
+
 	m.reconcile.Lock()
 	defer m.reconcile.Unlock()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.cache.Purge()
+
 	return nil
 }
 
@@ -75,10 +87,13 @@ func (m *Manager[T]) Len() int { m.mu.Lock(); defer m.mu.Unlock(); return m.cach
 func (m *Manager[T]) clearOwned() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.cache.Purge()
 	clear(m.versions)
+
 	for s := range m.watchers {
 		s.close()
 	}
+
 	clear(m.watchers)
 }

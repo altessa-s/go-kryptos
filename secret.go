@@ -35,10 +35,13 @@ func (s *Secret[T]) Clone() *Secret[T] {
 	if s == nil {
 		return nil
 	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	out := NewSecret(s.Key, s.Value, s.Encoded, s.Version)
 	out.EncodedKey = s.EncodedKey
+
 	return out
 }
 
@@ -47,8 +50,10 @@ func (s *Secret[T]) Clear() {
 	if s == nil {
 		return
 	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	zero.Clear(&s.Value)
 	clear(s.Encoded)
 	s.Encoded = nil
@@ -71,5 +76,6 @@ func CheckPayload[T any](v T) error {
 	if clone.Check(v) != nil {
 		return ErrUncloneablePayload
 	}
+
 	return nil
 }

@@ -22,6 +22,7 @@ func reviewProvider[T any](t *testing.T, codec codec.ValueCodec[T]) kryptos.Prov
 	p, err := vault.New[T](client, vault.WithValueCodec[T](codec))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, p.Close(t.Context())) })
+
 	return p
 }
 
@@ -38,6 +39,7 @@ func (c *privateCodec) Decode([]byte) (any, error) {
 }
 func TestDecodedPayloadMustBeCloneable(t *testing.T) {
 	t.Parallel()
+
 	codec := &privateCodec{}
 	p := reviewProvider[any](t, codec)
 	require.NoError(t, p.Put(t.Context(), "key", "seed"))
@@ -55,6 +57,7 @@ type listedPayload struct {
 func (p listedPayload) Clone() listedPayload {
 	p.data = slices.Clone(p.data)
 	*p.copies = append(*p.copies, p.data)
+
 	return p
 }
 func (p *listedPayload) Zeroize() { clear(p.data) }
@@ -72,20 +75,25 @@ func (c *listingCodec) Decode([]byte) (listedPayload, error) {
 		if c.fail {
 			return listedPayload{}, kryptos.ErrMalformed
 		}
+
 		panic("decode failed")
 	}
+
 	return listedPayload{data: []byte("secret"), copies: &c.copies}, nil
 }
 func TestListClearsUndeliveredCopies(t *testing.T) {
 	t.Parallel()
+
 	for _, fail := range []bool{false, true} {
 		t.Run(map[bool]string{false: "panic", true: "error"}[fail], func(t *testing.T) {
 			t.Parallel()
+
 			codec := &listingCodec{fail: fail}
 			p := reviewProvider[listedPayload](t, codec)
 			require.NoError(t, p.Put(t.Context(), "first", listedPayload{copies: &codec.copies}))
 			require.NoError(t, p.Put(t.Context(), "second", listedPayload{copies: &codec.copies}))
 			codec.copies = nil
+
 			if fail {
 				got, err := p.List(t.Context())
 				require.Nil(t, got)
@@ -93,6 +101,7 @@ func TestListClearsUndeliveredCopies(t *testing.T) {
 			} else {
 				require.Panics(t, func() { _, _ = p.List(t.Context()) })
 			}
+
 			require.Len(t, codec.copies, 1)
 			require.Equal(t, []byte{0, 0, 0, 0, 0, 0}, codec.copies[0])
 		})

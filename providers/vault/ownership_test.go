@@ -25,9 +25,11 @@ func (c *identityCodec) Encode(v []byte) ([]byte, error) { c.encoded = v; return
 func (*identityCodec) Decode(v []byte) ([]byte, error)   { return v, nil }
 func TestPutOwnsIdentityCodecInput(t *testing.T) {
 	t.Parallel()
+
 	for _, fail := range []bool{false, true} {
 		t.Run(map[bool]string{false: "success", true: "backend_error"}[fail], func(t *testing.T) {
 			t.Parallel()
+
 			codec := &identityCodec{}
 			b := &backend{data: map[string]*record{}}
 			srv := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -35,6 +37,7 @@ func TestPutOwnsIdentityCodecInput(t *testing.T) {
 					w.WriteHeader(http.StatusForbidden)
 					return
 				}
+
 				b.serve(w, r)
 			}))
 			cfg := api.DefaultConfig()
@@ -44,17 +47,22 @@ func TestPutOwnsIdentityCodecInput(t *testing.T) {
 			client, err := api.NewClient(cfg)
 			require.NoError(t, err)
 			p, err := vault.New[[]byte](client, vault.WithValueCodec[[]byte](codec))
+
 			require.NoError(t, err)
 			defer p.Close(t.Context())
+
 			input := []byte{0xff, 0x00, 0xfe, 0x80}
+
 			err = p.Put(t.Context(), "key", input)
 			if fail {
 				require.ErrorIs(t, err, kryptos.ErrPermissionDenied)
 			} else {
 				require.NoError(t, err)
 			}
+
 			require.Equal(t, []byte{0xff, 0x00, 0xfe, 0x80}, input)
 			require.Equal(t, make([]byte, len(input)), codec.encoded)
+
 			if !fail {
 				got, err := p.Get(t.Context(), "key")
 				require.NoError(t, err)
@@ -74,11 +82,14 @@ func (c *rejectedCodec) Decode(v []byte) ([]byte, error) {
 }
 func TestRejectedDecodedValueCleared(t *testing.T) {
 	t.Parallel()
+
 	codec := &rejectedCodec{}
 	client := newClient(t, &backend{data: map[string]*record{}})
 	p, err := vault.New[[]byte](client, vault.WithValueCodec[[]byte](codec))
+
 	require.NoError(t, err)
 	defer p.Close(t.Context())
+
 	require.NoError(t, p.Put(t.Context(), "key", []byte{0xff, 0x80}))
 	_, err = p.Get(t.Context(), "key")
 	require.ErrorIs(t, err, kryptos.ErrValueDecoding)
@@ -89,10 +100,12 @@ func TestBinaryIdentityContract(t *testing.T) {
 	t.Parallel()
 	kryptostest.RunProviderContract(t, func(t testing.TB) kryptos.Provider[[]byte] {
 		t.Helper()
+
 		codec := &identityCodec{}
 		client := newClient(t, &backend{data: map[string]*record{}})
 		p, err := vault.New[[]byte](client, vault.WithValueCodec[[]byte](codec))
 		require.NoError(t, err)
+
 		return p
 	}, kryptostest.Caps{}, []byte{0xff, 0, 0x80, 0xfe})
 }
@@ -113,29 +126,37 @@ func (c *payloadDecoder) Decode(v []byte) (*decodedPayload, error) {
 	if c.fail {
 		return c.decoded, kryptos.ErrMalformed
 	}
+
 	return c.decoded, nil
 }
 func TestDecodedZeroizerClearedOnFailure(t *testing.T) {
 	t.Parallel()
+
 	for _, fail := range []bool{true, false} {
 		t.Run(map[bool]string{true: "decode-error", false: "clone-panic"}[fail], func(t *testing.T) {
 			t.Parallel()
 			client := newClient(t, &backend{data: map[string]*record{}})
 			codec := &identityCodec{}
 			writer, err := vault.New[[]byte](client, vault.WithValueCodec[[]byte](codec))
+
 			require.NoError(t, err)
 			defer writer.Close(t.Context())
+
 			require.NoError(t, writer.Put(t.Context(), "key", []byte{0xff, 0x80}))
+
 			decoder := &payloadDecoder{fail: fail}
 			reader, err := vault.New[*decodedPayload](client, vault.WithValueCodec[*decodedPayload](decoder))
+
 			require.NoError(t, err)
 			defer reader.Close(t.Context())
+
 			if fail {
 				_, err = reader.Get(t.Context(), "key")
 				require.ErrorIs(t, err, kryptos.ErrValueDecoding)
 			} else {
 				require.Panics(t, func() { _, _ = reader.Get(t.Context(), "key") })
 			}
+
 			require.Equal(t, []byte{0, 0}, decoder.decoded.data)
 		})
 	}

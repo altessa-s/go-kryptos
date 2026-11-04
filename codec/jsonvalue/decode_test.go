@@ -14,11 +14,14 @@ import (
 
 func roundTripDecoded[T any](t *testing.T, b []byte) {
 	t.Helper()
+
 	c := jsonvalue.New[T]()
+
 	v, e := c.Decode(b)
 	if e != nil {
 		return
 	}
+
 	out, e := c.Encode(v)
 	require.NoError(t, e)
 	again, e := c.Decode(out)

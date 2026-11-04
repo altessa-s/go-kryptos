@@ -17,12 +17,15 @@ func (m *Manager[T]) Health(ctx context.Context) kryptos.HealthStatus {
 		return kryptos.NotServing
 	}
 	defer end()
+
 	if m.p.Ping(ctx) != nil {
 		return kryptos.NotServing
 	}
+
 	last := m.LastSync()
 	if !last.IsZero() && m.o.clock.Now().Sub(last) > m.o.staleAfter {
 		return kryptos.Degraded
 	}
+
 	return kryptos.Serving
 }
