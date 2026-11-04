@@ -13,16 +13,16 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"google.golang.org/api/option"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/altessa-s/go-kryptos/codec/base64key"
 	"github.com/altessa-s/go-kryptos/kryptostest"
 	"github.com/altessa-s/go-kryptos/manager"
 	"github.com/altessa-s/go-kryptos/providers/gcp"
 	"github.com/altessa-s/go-kryptos/providers/gcp/fake"
-
-	"google.golang.org/api/option"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	kryptos "github.com/altessa-s/go-kryptos"
 )

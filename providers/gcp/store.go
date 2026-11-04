@@ -16,14 +16,14 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/altessa-s/go-kryptos/codec/base64key"
-	"github.com/altessa-s/go-kryptos/codec/jsonvalue"
-	"github.com/altessa-s/go-kryptos/internal/zero"
-
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/altessa-s/go-kryptos/codec/base64key"
+	"github.com/altessa-s/go-kryptos/codec/jsonvalue"
+	"github.com/altessa-s/go-kryptos/internal/zero"
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	pb "cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"

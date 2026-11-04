@@ -18,7 +18,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/altessa-s/go-atlas-core/runtime/singleflight"
-
 	"github.com/altessa-s/go-atlas-net/httpx"
 
 	kryptos "github.com/altessa-s/go-kryptos"

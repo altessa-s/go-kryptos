@@ -10,10 +10,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"google.golang.org/grpc"
+
 	"github.com/altessa-s/go-kryptos/providers/lockbox"
 	"github.com/altessa-s/go-kryptos/providers/lockbox/fake"
-
-	"google.golang.org/grpc"
 
 	kryptos "github.com/altessa-s/go-kryptos"
 	pb "github.com/yandex-cloud/go-genproto/yandex/cloud/lockbox/v1"

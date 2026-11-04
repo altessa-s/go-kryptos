@@ -19,12 +19,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/altessa-s/go-kryptos/providers/gcp"
-	"github.com/altessa-s/go-kryptos/providers/gcp/fake"
-
 	"google.golang.org/api/option"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+
+	"github.com/altessa-s/go-kryptos/providers/gcp"
+	"github.com/altessa-s/go-kryptos/providers/gcp/fake"
 
 	pb "cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 )

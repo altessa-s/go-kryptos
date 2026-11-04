@@ -9,12 +9,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"google.golang.org/api/option"
+
 	"github.com/altessa-s/go-kryptos/kryptostest"
 	"github.com/altessa-s/go-kryptos/manager"
 	"github.com/altessa-s/go-kryptos/providers/gcp"
 	"github.com/altessa-s/go-kryptos/providers/gcp/fake"
-
-	"google.golang.org/api/option"
 
 	kryptos "github.com/altessa-s/go-kryptos"
 )

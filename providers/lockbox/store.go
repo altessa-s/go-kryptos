@@ -12,15 +12,15 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/altessa-s/go-kryptos/codec/base64key"
-	"github.com/altessa-s/go-kryptos/codec/jsonvalue"
-	"github.com/altessa-s/go-kryptos/internal/zero"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+
+	"github.com/altessa-s/go-kryptos/codec/base64key"
+	"github.com/altessa-s/go-kryptos/codec/jsonvalue"
+	"github.com/altessa-s/go-kryptos/internal/zero"
 
 	kryptos "github.com/altessa-s/go-kryptos"
 	pb "github.com/yandex-cloud/go-genproto/yandex/cloud/lockbox/v1"

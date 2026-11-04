@@ -10,14 +10,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/altessa-s/go-kryptos/kryptostest"
 	"github.com/altessa-s/go-kryptos/manager"
 	"github.com/altessa-s/go-kryptos/providers/lockbox"
 	"github.com/altessa-s/go-kryptos/providers/lockbox/fake"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	kryptos "github.com/altessa-s/go-kryptos"
 	pb "github.com/yandex-cloud/go-genproto/yandex/cloud/lockbox/v1"
