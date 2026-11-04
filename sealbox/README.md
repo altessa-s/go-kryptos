@@ -52,6 +52,6 @@ onto another record or swapped between two sealed fields of the same record.
 |-----------------|-------------------------------------------------------------------|
 | `ErrNoKey`      | No key configured (nil box, or a zero `Box` not built by `New`)   |
 | `ErrUnknownKey` | The value was sealed with a key that is not configured            |
-| `ErrOpen`       | The value does not authenticate (tampered, wrong associated data, nonce of the wrong length) |
+| `ErrOpen`       | The value does not open: nonce of the wrong length, or it does not authenticate (tampered, wrong associated data) |
 
 Key-loading errors name the key's position (0 = current), never its value.
