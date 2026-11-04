@@ -14,4 +14,6 @@ var (
 	ErrUnknownKey = errors.New("sealbox: the value was sealed with an unknown key")
 	// ErrOpen reports a value that does not decrypt (tampered, wrong associated data, malformed nonce).
 	ErrOpen = errors.New("sealbox: the value does not decrypt")
+	// ErrKeyIDCollision reports two different keys given to [New] that share a key ID ([KeyID]).
+	ErrKeyIDCollision = errors.New("sealbox: two different keys share a key ID")
 )

@@ -10,8 +10,10 @@
 // [New] takes the current master key and any number of previous ones, each the standard base64 encoding of 32 random bytes (for
 // example from configuration or a secret manager). The current key seals; every configured key opens. To rotate, configure a new
 // current key and move the old one to the previous keys; [Box.Current] tells which stored values still use an older key so they can be
-// re-sealed on their next save, after which the old key can be dropped. An empty current key yields a nil [*Box]: [Box.Seal] and
-// [Box.Open] fail with [ErrNoKey] and [Box.Current] and [Box.Opens] report false, so a service can run without secrets storage configured.
+// re-sealed on their next save, after which the old key can be dropped. A key given more than once is kept once; two different keys
+// whose [KeyID] collide are rejected with [ErrKeyIDCollision], since a sealed value names its key only by that ID. An empty current
+// key yields a nil [*Box]: [Box.Seal] and [Box.Open] fail with [ErrNoKey] and [Box.Current] and [Box.Opens] report false, so a service
+// can run without secrets storage configured.
 //
 // # Nonce budget
 //

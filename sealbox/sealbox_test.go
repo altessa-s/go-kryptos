@@ -201,6 +201,69 @@ func TestNewRejectsMalformedKeys(t *testing.T) {
 	}
 }
 
+func TestNewKeyIDCollision(t *testing.T) {
+	t.Parallel()
+
+	constantID := func([]byte) string { return "0000000000000000" }
+	a, b := newKey(t), newKey(t)
+
+	for name, tc := range map[string]struct {
+		current  string
+		previous []string
+		wantErr  error
+	}{
+		"current and previous differ":    {current: a, previous: []string{b}, wantErr: sealbox.ErrKeyIDCollision},
+		"two previous differ":            {current: a, previous: []string{a, b}, wantErr: sealbox.ErrKeyIDCollision},
+		"current repeated as previous":   {current: a, previous: []string{a}},
+		"repeated with other whitespace": {current: a, previous: []string{" " + a + "\n"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			box, err := sealbox.NewWithKeyID(constantID, tc.current, tc.previous...)
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+				require.Nil(t, box)
+
+				for _, k := range append([]string{tc.current}, tc.previous...) {
+					require.NotContains(t, err.Error(), k, "the error must not quote a key")
+				}
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			sealed, err := box.Seal([]byte("v"), nil)
+			require.NoError(t, err)
+			require.True(t, box.Current(sealed))
+
+			want, err := sealbox.NewWithKeyID(constantID, tc.current)
+			require.NoError(t, err)
+			got, err := want.Open(sealed, nil)
+			require.NoError(t, err, "the current key must still seal")
+			require.Equal(t, "v", string(got))
+		})
+	}
+}
+
+func TestNewCurrentNotDisplacedByPrevious(t *testing.T) {
+	t.Parallel()
+
+	current := newKey(t)
+	box, err := sealbox.New(current, newKey(t), current)
+	require.NoError(t, err)
+
+	sealed, err := box.Seal([]byte("v"), nil)
+	require.NoError(t, err)
+
+	only, err := sealbox.New(current)
+	require.NoError(t, err)
+	require.True(t, only.Current(sealed))
+	_, err = only.Open(sealed, nil)
+	require.NoError(t, err)
+}
+
 func TestKeyWhitespaceIgnored(t *testing.T) {
 	t.Parallel()
 

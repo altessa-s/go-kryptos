@@ -12,7 +12,7 @@ caller-chosen associated data.
 
 | Symbol                  | Description                                                                                                  |
 |-------------------------|--------------------------------------------------------------------------------------------------------------|
-| `New(current, prev...)` | Builds a `*Box`; an empty current key returns a nil box (no error): `Seal`/`Open` fail with `ErrNoKey`, `Current`/`Opens` report false |
+| `New(current, prev...)` | Builds a `*Box`; an empty current key returns a nil box (no error): `Seal`/`Open` fail with `ErrNoKey`, `Current`/`Opens` report false. A key given twice is kept once; two different keys with the same key ID fail with `ErrKeyIDCollision` |
 | `Box.Seal(p, aad)`      | Encrypts with the current key and a fresh random nonce                                                       |
 | `Box.Open(s, aad)`      | Decrypts with the key named by `s.KeyID`; `ErrNoKey` for a box without keys, `ErrUnknownKey` for a key not configured, `ErrOpen` when the value does not open |
 | `Box.Current(s)`        | Whether `s` was sealed with the current key (re-seal values that are not)                                   |
@@ -53,5 +53,6 @@ onto another record or swapped between two sealed fields of the same record.
 | `ErrNoKey`      | No key configured (nil box, or a zero `Box` not built by `New`)   |
 | `ErrUnknownKey` | The value was sealed with a key that is not configured            |
 | `ErrOpen`       | The value does not open: nonce of the wrong length, or it does not authenticate (tampered, wrong associated data) |
+| `ErrKeyIDCollision` | `New` was given two different keys with the same key ID                |
 
-Key-loading errors name the key's position (0 = current), never its value.
+Key-loading errors name the key's position (0 = current), never its value; `ErrKeyIDCollision` names both positions.

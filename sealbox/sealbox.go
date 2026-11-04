@@ -9,6 +9,7 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -46,25 +47,49 @@ type Box struct {
 // New returns a box sealing with current and opening with current and previous. Keys are standard base64 encodings of 32-byte values;
 // surrounding whitespace is ignored. An empty (or blank) current key returns a nil box and no error: no key is configured; Seal and Open on
 // the nil box report [ErrNoKey], Current and Opens report false. A malformed key fails with an error naming its position (0 = current), never its value.
+// The same key given more than once is accepted and kept once. Two different keys with the same [KeyID] fail with [ErrKeyIDCollision],
+// naming both positions: values record only the key ID, so the box could not tell which key opens them.
 func New(current string, previous ...string) (*Box, error) {
+	return newBox(KeyID, current, previous...)
+}
+
+// newBox implements [New] with keyID deriving the key identifiers, so that a key ID collision can be exercised in tests.
+func newBox(keyID func(key []byte) string, current string, previous ...string) (*Box, error) {
 	if strings.TrimSpace(current) == "" {
 		return nil, nil //nolint:nilnil // no key configured is not an error: the nil box reports ErrNoKey
 	}
 
+	type loaded struct {
+		key []byte
+		pos int
+	}
+
 	aeads := make(map[string]cipher.AEAD, 1+len(previous))
+	seen := make(map[string]loaded, 1+len(previous))
 
 	var currentID string
 
 	for i, k := range append([]string{current}, previous...) {
-		id, aead, err := load(k)
+		key, aead, err := load(k)
 		if err != nil {
 			return nil, fmt.Errorf("sealbox: key %d: %w", i, err)
 		}
+
+		id := keyID(key)
 
 		if i == 0 {
 			currentID = id
 		}
 
+		if prev, ok := seen[id]; ok {
+			if subtle.ConstantTimeCompare(prev.key, key) != 1 {
+				return nil, fmt.Errorf("%w: key %d and key %d", ErrKeyIDCollision, prev.pos, i)
+			}
+
+			continue
+		}
+
+		seen[id] = loaded{key: key, pos: i}
 		aeads[id] = aead
 	}
 
@@ -77,27 +102,27 @@ func KeyID(key []byte) string {
 	return hex.EncodeToString(sum[:])[:KeyIDLen]
 }
 
-func load(encoded string) (string, cipher.AEAD, error) {
+func load(encoded string) ([]byte, cipher.AEAD, error) {
 	key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(encoded))
 	if err != nil {
-		return "", nil, fmt.Errorf("not base64: %w", err)
+		return nil, nil, fmt.Errorf("not base64: %w", err)
 	}
 
 	if len(key) != KeyLen {
-		return "", nil, fmt.Errorf("%d bytes, want %d", len(key), KeyLen)
+		return nil, nil, fmt.Errorf("%d bytes, want %d", len(key), KeyLen)
 	}
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
 
 	aead, err := cipher.NewGCM(block)
 	if err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
 
-	return KeyID(key), aead, nil
+	return key, aead, nil
 }
 
 // Seal encrypts plaintext with the current key under a fresh random nonce, binding it to aad: the value opens only with the same
