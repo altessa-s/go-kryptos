@@ -7,7 +7,8 @@ package sealbox
 import "errors"
 
 var (
-	// ErrNoKey reports a box without a configured key (a nil [Box]).
+	// ErrNoKey reports a box without a configured key: a nil [Box], or a zero
+	// Box not built by [New].
 	ErrNoKey = errors.New("sealbox: no secret key is configured")
 	// ErrUnknownKey reports a sealed value whose key is not configured (it was rotated out).
 	ErrUnknownKey = errors.New("sealbox: the value was sealed with an unknown key")
