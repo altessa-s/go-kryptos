@@ -50,7 +50,7 @@ onto another record or swapped between two sealed fields of the same record.
 
 | Error           | Meaning                                                           |
 |-----------------|-------------------------------------------------------------------|
-| `ErrNoKey`      | No key configured (nil box)                                       |
+| `ErrNoKey`      | No key configured (nil box, or a zero `Box` not built by `New`)   |
 | `ErrUnknownKey` | The value was sealed with a key that is not configured            |
 | `ErrOpen`       | The value does not authenticate (tampered, wrong associated data) |
 
