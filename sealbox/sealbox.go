@@ -50,18 +50,24 @@ func New(current string, previous ...string) (*Box, error) {
 	if strings.TrimSpace(current) == "" {
 		return nil, nil //nolint:nilnil // no key configured is not an error: the nil box reports ErrNoKey
 	}
+
 	aeads := make(map[string]cipher.AEAD, 1+len(previous))
+
 	var currentID string
+
 	for i, k := range append([]string{current}, previous...) {
 		id, aead, err := load(k)
 		if err != nil {
 			return nil, fmt.Errorf("sealbox: key %d: %w", i, err)
 		}
+
 		if i == 0 {
 			currentID = id
 		}
+
 		aeads[id] = aead
 	}
+
 	return &Box{current: currentID, aeads: coremaps.NewImmutableMap(aeads)}, nil
 }
 
@@ -76,17 +82,21 @@ func load(encoded string) (string, cipher.AEAD, error) {
 	if err != nil {
 		return "", nil, fmt.Errorf("not base64: %w", err)
 	}
+
 	if len(key) != KeyLen {
 		return "", nil, fmt.Errorf("%d bytes, want %d", len(key), KeyLen)
 	}
+
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", nil, err
 	}
+
 	aead, err := cipher.NewGCM(block)
 	if err != nil {
 		return "", nil, err
 	}
+
 	return KeyID(key), aead, nil
 }
 
@@ -96,11 +106,14 @@ func (b *Box) Seal(plaintext, aad []byte) (Sealed, error) {
 	if b.unset() {
 		return Sealed{}, ErrNoKey
 	}
+
 	aead, _ := b.aeads.Get(b.current)
+
 	nonce := make([]byte, aead.NonceSize())
 	if _, err := rand.Read(nonce); err != nil {
 		return Sealed{}, fmt.Errorf("sealbox: nonce: %w", err)
 	}
+
 	return Sealed{KeyID: b.current, Nonce: nonce, Ciphertext: aead.Seal(nil, nonce, plaintext, aad)}, nil
 }
 
@@ -110,17 +123,21 @@ func (b *Box) Open(s Sealed, aad []byte) ([]byte, error) {
 	if b.unset() {
 		return nil, ErrNoKey
 	}
+
 	aead, ok := b.aeads.Get(s.KeyID)
 	if !ok {
 		return nil, ErrUnknownKey
 	}
+
 	if len(s.Nonce) != aead.NonceSize() {
 		return nil, ErrOpen
 	}
+
 	out, err := aead.Open(nil, s.Nonce, s.Ciphertext, aad)
 	if err != nil {
 		return nil, ErrOpen
 	}
+
 	return out, nil
 }
 
@@ -135,6 +152,7 @@ func (b *Box) Opens(s Sealed) bool {
 	if b.unset() {
 		return false
 	}
+
 	return b.aeads.Contains(s.KeyID)
 }
 

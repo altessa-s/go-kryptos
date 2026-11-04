@@ -18,16 +18,20 @@ import (
 
 func newKey(t testing.TB) string {
 	t.Helper()
+
 	k := make([]byte, sealbox.KeyLen)
 	_, err := rand.Read(k)
 	require.NoError(t, err)
+
 	return base64.StdEncoding.EncodeToString(k)
 }
 
 func unhex(t testing.TB, s string) []byte {
 	t.Helper()
+
 	b, err := hex.DecodeString(s)
 	require.NoError(t, err)
+
 	return b
 }
 
@@ -36,6 +40,7 @@ func TestSealOpenRoundTrip(t *testing.T) {
 
 	box, err := sealbox.New(newKey(t))
 	require.NoError(t, err)
+
 	aad := []byte("provider:openai")
 	sealed, err := box.Seal([]byte("sk-secret"), aad)
 	require.NoError(t, err)
@@ -88,6 +93,7 @@ func TestZeroBoxHasNoKey(t *testing.T) {
 	t.Parallel()
 
 	box := &sealbox.Box{}
+
 	require.NotPanics(t, func() {
 		_, err := box.Seal([]byte("x"), nil)
 		require.ErrorIs(t, err, sealbox.ErrNoKey)
@@ -164,6 +170,7 @@ func TestOpenRejectsTampering(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
+
 			_, err := box.Open(s, []byte("aad"))
 			require.ErrorIs(t, err, sealbox.ErrOpen)
 		})
@@ -182,9 +189,11 @@ func TestNewRejectsMalformedKeys(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
+
 			box, err := sealbox.New(keys[0], keys[1:]...)
 			require.Error(t, err)
 			require.Nil(t, box)
+
 			for _, k := range keys {
 				require.NotContains(t, err.Error(), k, "the error must not quote a key")
 			}
@@ -212,6 +221,7 @@ func TestKeyID(t *testing.T) {
 	for i := range key {
 		key[i] = byte(i)
 	}
+
 	require.Equal(t, "630dcd2966c43366", sealbox.KeyID(key))
 }
 
@@ -225,6 +235,7 @@ func TestGoldenVectors(t *testing.T) {
 		current  = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=" // bytes 0x00..0x1f
 		previous = "//79/Pv6+fj39vX08/Lx8O/u7ezr6uno5+bl5OPi4eA=" // bytes 0xff..0xe0
 	)
+
 	box, err := sealbox.New(current, previous)
 	require.NoError(t, err)
 
@@ -259,6 +270,7 @@ func TestGoldenVectors(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
 			got, err := box.Open(tc.sealed, tc.aad)
 			require.NoError(t, err)
 			require.Equal(t, tc.want, string(got))
@@ -272,6 +284,7 @@ func TestConcurrentUse(t *testing.T) {
 
 	box, err := sealbox.New(newKey(t), newKey(t))
 	require.NoError(t, err)
+
 	var wg sync.WaitGroup
 	for range 16 {
 		wg.Go(func() {
@@ -281,6 +294,7 @@ func TestConcurrentUse(t *testing.T) {
 					t.Error(err)
 					return
 				}
+
 				if _, err := box.Open(s, []byte("a")); err != nil {
 					t.Error(err)
 					return
@@ -288,5 +302,6 @@ func TestConcurrentUse(t *testing.T) {
 			}
 		})
 	}
+
 	wg.Wait()
 }
