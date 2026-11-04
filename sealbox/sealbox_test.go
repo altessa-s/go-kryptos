@@ -82,6 +82,22 @@ func TestNilBoxHasNoKey(t *testing.T) {
 	}
 }
 
+// TestZeroBoxHasNoKey pins that a Box not built by New behaves like a nil
+// box instead of panicking on its missing keyring.
+func TestZeroBoxHasNoKey(t *testing.T) {
+	t.Parallel()
+
+	box := &sealbox.Box{}
+	require.NotPanics(t, func() {
+		_, err := box.Seal([]byte("x"), nil)
+		require.ErrorIs(t, err, sealbox.ErrNoKey)
+		_, err = box.Open(sealbox.Sealed{KeyID: "k", Nonce: make([]byte, 12), Ciphertext: []byte("c")}, nil)
+		require.ErrorIs(t, err, sealbox.ErrNoKey)
+	})
+	require.False(t, box.Current(sealbox.Sealed{}))
+	require.False(t, box.Opens(sealbox.Sealed{}))
+}
+
 func TestRotationOpensPrevious(t *testing.T) {
 	t.Parallel()
 

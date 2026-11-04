@@ -37,7 +37,7 @@ type Sealed struct {
 func (s Sealed) Set() bool { return len(s.Ciphertext) > 0 }
 
 // Box seals and opens values with AES-256-GCM. The current key seals; previous keys still open values sealed before a rotation. A nil
-// Box has no key: sealing and opening fail with [ErrNoKey]. A Box is immutable and safe for concurrent use.
+// Box, or a zero Box not built by [New], has no key: sealing and opening fail with [ErrNoKey]. A Box is immutable and safe for concurrent use.
 type Box struct {
 	current string
 	aeads   *coremaps.ImmutableMap[string, cipher.AEAD]
@@ -93,7 +93,7 @@ func load(encoded string) (string, cipher.AEAD, error) {
 // Seal encrypts plaintext with the current key under a fresh random nonce, binding it to aad: the value opens only with the same
 // associated data.
 func (b *Box) Seal(plaintext, aad []byte) (Sealed, error) {
-	if b == nil {
+	if b.unset() {
 		return Sealed{}, ErrNoKey
 	}
 	aead, _ := b.aeads.Get(b.current)
@@ -107,7 +107,7 @@ func (b *Box) Seal(plaintext, aad []byte) (Sealed, error) {
 // Open decrypts a sealed value with its key and associated data. A key that is not configured fails with [ErrUnknownKey]; a value
 // that does not authenticate (tampered, wrong associated data, malformed nonce) fails with [ErrOpen].
 func (b *Box) Open(s Sealed, aad []byte) ([]byte, error) {
-	if b == nil {
+	if b.unset() {
 		return nil, ErrNoKey
 	}
 	aead, ok := b.aeads.Get(s.KeyID)
@@ -127,13 +127,19 @@ func (b *Box) Open(s Sealed, aad []byte) ([]byte, error) {
 // Current reports whether a value was sealed with the current key. Values sealed with a previous key should be re-sealed on their next
 // save so the previous key can eventually be dropped.
 func (b *Box) Current(s Sealed) bool {
-	return b != nil && s.KeyID == b.current
+	return !b.unset() && s.KeyID == b.current
 }
 
 // Opens reports whether the box holds the key s was sealed with (the current or a previous one). It does not authenticate the value.
 func (b *Box) Opens(s Sealed) bool {
-	if b == nil {
+	if b.unset() {
 		return false
 	}
 	return b.aeads.Contains(s.KeyID)
+}
+
+// unset reports whether the box has no key: a nil box, or a zero Box not
+// built by [New].
+func (b *Box) unset() bool {
+	return b == nil || b.aeads == nil
 }
