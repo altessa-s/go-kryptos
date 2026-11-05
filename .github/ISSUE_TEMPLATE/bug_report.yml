@@ -42,6 +42,7 @@ body:
         - providers/gcp/fake
         - providers/lockbox
         - providers/lockbox/fake
+        - sealbox
         - kryptostest
         - internal/clone
         - internal/zero
