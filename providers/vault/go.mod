@@ -2,7 +2,7 @@ module github.com/altessa-s/go-kryptos/providers/vault
 
 go 1.27.0
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 require (
 	github.com/altessa-s/go-kryptos v0.1.4

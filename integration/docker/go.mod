@@ -2,7 +2,7 @@ module github.com/altessa-s/go-kryptos/integration/docker
 
 go 1.27.0
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 require (
 	github.com/altessa-s/go-atlas-net v0.2.3

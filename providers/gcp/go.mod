@@ -2,7 +2,7 @@ module github.com/altessa-s/go-kryptos/providers/gcp
 
 go 1.27.0
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 require (
 	cloud.google.com/go/secretmanager v1.23.1
