@@ -2,15 +2,15 @@ module github.com/altessa-s/go-kryptos/providers/lockbox
 
 go 1.27.0
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 require (
-	github.com/altessa-s/go-atlas-core v0.3.3
-	github.com/altessa-s/go-atlas-net v0.2.3
+	github.com/altessa-s/go-atlas-core v0.3.5
+	github.com/altessa-s/go-atlas-net v0.3.6
 	github.com/altessa-s/go-kryptos v0.1.4
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/stretchr/testify v1.12.1
-	github.com/yandex-cloud/go-genproto v0.134.0
+	github.com/yandex-cloud/go-genproto v0.136.0
 	google.golang.org/grpc v1.85.0
 	google.golang.org/protobuf v1.36.12
 )

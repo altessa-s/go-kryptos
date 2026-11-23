@@ -2,7 +2,7 @@ module github.com/altessa-s/go-kryptos/providers/vault
 
 go 1.27.0
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 require (
 	github.com/altessa-s/go-kryptos v0.1.4
@@ -11,7 +11,7 @@ require (
 )
 
 require (
-	github.com/altessa-s/go-atlas-core v0.3.3 // indirect
+	github.com/altessa-s/go-atlas-core v0.3.5 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.7 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect

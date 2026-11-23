@@ -41,7 +41,7 @@ work.
 | `integration/docker` | Test-only Vault container and go-nomos conformance |
 
 The root requires go-atlas-core v0.3.0 for lifecycle/concurrency and hashicorp/golang-lru/v2 v2.0.7 only inside `internal/lru`.
-Cloud SDK dependencies stay in provider modules. Testify v1.12.1 and its indirect dependencies support tests. Go 1.27.3 is pinned.
+Cloud SDK dependencies stay in provider modules. Testify v1.12.1 and its indirect dependencies support tests. Go 1.27.4 is pinned.
 
 ## Ownership and redaction
 

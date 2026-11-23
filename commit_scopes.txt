@@ -12,7 +12,6 @@ docs                        # Documentation
 # Packages
 kryptos                     # Root package: secret type, provider ports, key rules, errors
 codec                       # Key and value codec ports
-sealbox                     # AES-256-GCM sealing of small secrets at rest
 codec/base64key             # Base64 key codec
 codec/jsonvalue             # JSON value codec
 manager                     # Manager: cache, write-through, update cycle, watch, health
@@ -22,6 +21,7 @@ providers/gcp               # Google Cloud Secret Manager provider, nested modul
 providers/gcp/fake          # Socket-free Secret Manager backend for tests
 providers/lockbox           # Yandex Cloud Lockbox provider, nested module
 providers/lockbox/fake      # Socket-free Lockbox backend for tests
+sealbox                     # AES-256-GCM sealing of small secrets at rest
 kryptostest                 # Provider contract suite and test doubles
 internal/clone              # Deep copy of secret payloads
 internal/zero               # Clearing of secret payloads
