@@ -5,7 +5,7 @@ go 1.27.0
 toolchain go1.27.4
 
 require (
-	cloud.google.com/go/secretmanager v1.23.1
+	cloud.google.com/go/secretmanager v1.24.0
 	github.com/altessa-s/go-kryptos v0.1.4
 	github.com/stretchr/testify v1.12.1
 	google.golang.org/api v0.311.0
