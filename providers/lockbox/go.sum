@@ -1,7 +1,7 @@
-github.com/altessa-s/go-atlas-core v0.3.3 h1:reB/LuzTRNRgq/yfIGTjkJ5xAgJHn38AMuafRAdbsco=
-github.com/altessa-s/go-atlas-core v0.3.3/go.mod h1:xOKuQewGd1wO3llziO2K6CUUtr3FHGnJHUMRUIOCaHw=
-github.com/altessa-s/go-atlas-net v0.2.3 h1:WP38nXi9lLniA+Q1betPIM0kmU6x5FnHVUhRaNY7wqE=
-github.com/altessa-s/go-atlas-net v0.2.3/go.mod h1:k+221gyd9I0Api7N+h+TdCmEpFmpmPHMAOajlZMzsVo=
+github.com/altessa-s/go-atlas-core v0.3.5 h1:DNnmNkYdEgPnhQun9kN/3F4Qgw+uvsqTFmK/VMZWVjM=
+github.com/altessa-s/go-atlas-core v0.3.5/go.mod h1:lDhYlaxQK66YpjRyyZHJUzQsgQkhEhzBZ3SXSaXuHQM=
+github.com/altessa-s/go-atlas-net v0.3.6 h1:H9skPiJs/vM4O/kxI7d1dsVo2mJlmPc6D8qdQWK9HZ4=
+github.com/altessa-s/go-atlas-net v0.3.6/go.mod h1:wJqY0YfQWMmaX5/B6gSjFzxYFBtiRGuguGClHknF1zI=
 github.com/golang-jwt/jwt/v5 v5.3.1 h1:kYf81DTWFe7t+1VvL7eS+jKFVWaUnK9cB1qbwn63YCY=
 github.com/golang-jwt/jwt/v5 v5.3.1/go.mod h1:fxCRLWMO43lRc8nhHWY6LGqRcf+1gQWArsqaEUEa5bE=
 github.com/golang/protobuf v1.5.4 h1:i7eJL8qZTpSEXOPTxNKhASYpMn+8e5Q6AdndVa1dWek=
