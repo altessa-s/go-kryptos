@@ -6,7 +6,7 @@ toolchain go1.27.4
 
 require (
 	github.com/altessa-s/go-atlas-net v0.3.6
-	github.com/altessa-s/go-kryptos v0.1.4
+	github.com/altessa-s/go-kryptos v0.1.5
 	github.com/altessa-s/go-kryptos/providers/vault v0.0.0
 	github.com/altessa-s/go-nomos v0.2.4
 	github.com/hashicorp/vault/api v1.23.0
